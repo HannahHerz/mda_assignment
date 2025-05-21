@@ -1,106 +1,115 @@
 import faicons as fa
 import plotly.express as px
 import numpy as np
-from mda_assignment.shared import app_dir, tips, data
+from mda_assignment.shared import app_dir, data
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly
-
 
 
 ICONS = {
     "euro": fa.icon_svg("euro-sign"),
     "wallet": fa.icon_svg("wallet"),
     "contract": fa.icon_svg("file-contract"),
-    "ellipsis": fa.icon_svg("cat"),
+    "ellipsis": fa.icon_svg("frog"),
 }
 
 year_rng = (int(data['ecSignatureDate'].dt.year.min()), int(data['ecSignatureDate'].dt.year.max()))
 
-app_ui = ui.page_sidebar(
-    
-    ui.sidebar(
-        ui.input_slider(
+app_ui = ui.page_fillable(
+    ui.input_dark_mode(),
+    ui.navset_pill(  
+        ui.nav_panel(
+            "Dashboard",
+       ui.card(ui.card_header("Filters"), ui.layout_columns(
+           ui.card(ui.input_slider(
             "signature_year",
             "Signature Year Range",
             min=year_rng[0],
             max=year_rng[1],
             value=year_rng,
-        ),
-        ui.input_checkbox_group(
+        )),
+        ui.card(ui.input_checkbox_group(
             "time",
             "Food service",
             ["Lunch", "Dinner"],
             selected=["Lunch", "Dinner"],
             inline=True,
-        ),
+        ))),
         ui.input_action_button("reset", "Reset filter"),
-        open="desktop",
-    ),
-     
-    ui.layout_columns(
-        ui.value_box(
-            "Total Funding", ui.output_ui("total_funding"), showcase=ICONS["euro"]
-        ),
-        ui.value_box(
-            "Average Funding per Project", ui.output_ui("average_funding"), showcase=ICONS["wallet"]
-        ),
-        ui.value_box(
-            "Amount of Projects",
-            ui.output_ui("projectcount"),
-            showcase=ICONS["contract"],
-        ),
-        fill=False,
-    ),
-    ui.layout_columns(
-        ui.card(
-            ui.card_header("Tips data"), ui.output_data_frame("table")
-        ),
-        ui.card(
-            ui.card_header(
-                "Total bill vs tip",
-                ui.popover(
-                    ICONS["ellipsis"],
-                    ui.input_radio_buttons(
-                        "scatter_color",
-                        None,
-                        ["none", "sex", "smoker", "day", "time"],
-                        inline=True,
-                    ),
-                    title="Add a color variable",
-                    placement="top",
+        open="desktop",),
+
+            ui.layout_columns(
+                ui.value_box(
+                    "Total Funding", 
+                    ui.output_ui("total_funding"), 
+                    showcase=ICONS["euro"]
                 ),
-                class_="d-flex justify-content-between align-items-center",
-            ),
-            output_widget("scatterplot"),
-            full_screen=True,
-        ),
-        ui.card(
-            ui.card_header(
-                "Quarterly Funding",
-                ui.popover(
-                    ICONS["ellipsis"],
-                    ui.input_radio_buttons(
-                        "time_contribution_y",
-                        "Split by:",
-                        ["sex", "smoker", "day", "time"],
-                        selected="day",
-                        inline=True,
-                    ),
-                    title="Add a color variable",
+                ui.value_box(
+                    "Average Funding per Project", 
+                    ui.output_ui("average_funding"), 
+                    showcase=ICONS["wallet"]
                 ),
-                class_="d-flex justify-content-between align-items-center",
+                ui.value_box(
+                    "Amount of Projects",
+                    ui.output_ui("projectcount"),
+                    showcase=ICONS["contract"],
+                ),
+                fill=False,
             ),
-            output_widget("time_contribution"),
-            full_screen=True,
+            ui.layout_columns(
+                ui.card(
+                    ui.card_header("Funding data"), 
+                    ui.output_data_frame("table")
+                ),
+                ui.card(
+                    ui.card_header(
+                        "Scatterplot",
+                        ui.popover(
+                            ICONS["ellipsis"],
+                            ui.input_radio_buttons(
+                                "scatter_color",
+                                None,
+                                ["none", "sex", "smoker", "day", "time"],
+                                inline=True,
+                            ),
+                            title="Add a color variable",
+                            placement="top",
+                        ),
+                        class_="d-flex justify-content-between align-items-center",
+                    ),
+                    output_widget("scatterplot"),
+                    full_screen=True,
+                ),
+                ui.card(
+                    ui.card_header(
+                        "Quarterly Funding",
+                        ui.popover(
+                            ICONS["ellipsis"],
+                            ui.input_radio_buttons(
+                                "time_contribution_y",
+                                "Split by:",
+                                ["sex", "smoker", "day", "time"],
+                                selected="day",
+                                inline=True,
+                            ),
+                            title="Add a color variable",
+                        ),
+                        class_="d-flex justify-content-between align-items-center",
+                    ),
+                    output_widget("time_contribution"),
+                    full_screen=True,
+                ),
+                col_widths=[6, 6, 12],
+            )
         ),
-        col_widths=[6, 6, 12],
+        ui.nav_panel("Predictions",
+                    "test")
     ),
     ui.include_css(app_dir / "styles.css"),
-    title="HORIZON Projects Funding",
     fillable=True,
 )
 
-#function to format large numbers
+# Function to format large numbers
 def format_number(num):
     """
     Format a number with k, m, b, t suffixes for thousands, millions, billions, trillions
@@ -125,10 +134,6 @@ def server(input, output, session):
         idx1 = data['ecSignatureDate'].dt.year.between(year_range[0], year_range[1])
         return data[idx1]
     
-    @reactive.calc
-    def tips_data():
-        idx2 = tips.time.isin(input.time())
-        return tips[idx2]
         
     @render.ui
     def total_funding():
@@ -148,24 +153,23 @@ def server(input, output, session):
 
     @render.data_frame
     def table():
-        return render.DataGrid(tips_data())
+        return render.DataGrid(filtered_data())
 
     @render_plotly
     def scatterplot():
         color = input.scatter_color()
         return px.scatter(
-            tips_data(),
-            x="total_bill",
-            y="tip",
+            filtered_data(),
+            x="ecMaxContribution",
+            y="ecContribution_sum",
             color=None if color == "none" else color,
             trendline="lowess",
         )
 
     @render_plotly
     def time_contribution():
-       
         clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'ecMaxContribution'])
-      
+        
         clean_data['quarter'] = clean_data['ecSignatureDate'].dt.to_period('Q').astype(str)
         clean_data['quarter'] = clean_data['quarter'].str.replace('Q', ' Q')
         
