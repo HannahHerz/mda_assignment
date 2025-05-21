@@ -109,6 +109,34 @@ app_ui = ui.page_fillable(
                     output_widget("time_contribution"),
                     full_screen=True,
                 ),
+                ui.card(
+                    ui.card_header(
+                        "Country Funding",
+                        ui.popover(
+                            ICONS["ellipsis"],
+                            ui.input_select(
+                                "map_topic",
+                                "Select Topic",
+                                {
+                                    "all": "All Topics",
+                                    "natural sciences": "Natural Sciences",
+                                    "engineering and technology": "Engineering & Tech",
+                                    "medical and health sciences": "Medical & Health",
+                                    "social sciences": "Social Sciences",
+                                    "humanities": "Humanities",
+                                    "agricultural sciences": "Agricultural Sciences",
+                                    "not available": "Not Available"
+                                },
+                                selected="all"
+                            ),
+                            title="Filter by topic",
+                            placement="top"
+                        ),
+                        class_="d-flex justify-content-between align-items-center",
+                    ),
+                    output_widget("country_map"),
+                    full_screen=True
+                ),
                 col_widths=[6, 6, 12],
             ),
         ),
@@ -217,11 +245,139 @@ def server(input, output, session):
         )
         return fig
 
-    @reactive.effect
-    @reactive.event(input.reset)
-    def _():
-        ui.update_slider("signature_year", value=year_rng)
-        ui.update_checkbox_group("time", selected=["Lunch", "Dinner"])
+    @reactive.calc
+    def map_data():
+        # Filter by selected topic
+        df = filtered_data()
+        if input.map_topic() != "all":
+            df = df[df["topic"] == input.map_topic()]
+        
+        # Get European country codes (2-letter to 3-letter mapping)
+        country_mapping = {
+            'AT': 'AUT', 'BE': 'BEL', 'BG': 'BGR', 'HR': 'HRV', 'CY': 'CYP',
+            'CZ': 'CZE', 'DK': 'DNK', 'EE': 'EST', 'FI': 'FIN', 'FR': 'FRA',
+            'DE': 'DEU', 'GR': 'GRC', 'HU': 'HUN', 'IE': 'IRL', 'IT': 'ITA',
+            'LV': 'LVA', 'LT': 'LTU', 'LU': 'LUX', 'MT': 'MLT', 'NL': 'NLD',
+            'PL': 'POL', 'PT': 'PRT', 'RO': 'ROU', 'SK': 'SVK', 'SI': 'SVN',
+            'ES': 'ESP', 'SE': 'SWE', 'GB': 'GBR', 'NO': 'NOR', 'CH': 'CHE'
+        }
+        
+        country_names = {
+            'AT': 'Austria', 
+            'BE': 'Belgium', 
+            'BG': 'Bulgaria', 
+            'HR': 'Croatia', 
+            'CY': 'Cyprus',
+            'CZ': 'Czech Republic', 
+            'DK': 'Denmark', 
+            'EE': 'Estonia', 
+            'FI': 'Finland', 
+            'FR': 'France',
+            'DE': 'Germany', 
+            'GR': 'Greece', 
+            'HU': 'Hungary', 
+            'IE': 'Ireland', 
+            'IT': 'Italy',
+            'LV': 'Latvia', 
+            'LT': 'Lithuania', 
+            'LU': 'Luxembourg', 
+            'MT': 'Malta', 
+            'NL': 'Netherlands',
+            'PL': 'Poland', 
+            'PT': 'Portugal', 
+            'RO': 'Romania', 
+            'SK': 'Slovakia', 
+            'SI': 'Slovenia',
+            'ES': 'Spain', 
+            'SE': 'Sweden', 
+            'GB': 'United Kingdom', 
+            'NO': 'Norway', 
+            'CH': 'Switzerland'
+        }
 
+        # Process data
+        europe_df = df[df["country"].isin(country_mapping.keys())]
+        if europe_df.empty:
+            return pd.DataFrame()
+        
+        # Calculate average funding and top topics
+        agg_df = europe_df.groupby("country").agg(
+            average_funding=("ecMaxContribution", "mean"),
+            total_projects=("projectID", "count")
+        ).reset_index()
+        
+        # Get top 3 topics per country
+        top_topics = {}
+        for country in agg_df["country"]:
+            country_data = europe_df[europe_df["country"] == country]
+            topics = country_data["topic"].value_counts().head(3).index.tolist()
+            top_topics[country] = topics
+        
+        agg_df["top_topics"] = agg_df["country"].map(top_topics)
+        
+        # Add 3-letter country codes
+        agg_df["iso_alpha"] = agg_df["country"].map(country_mapping)
+        agg_df["country_name"] = agg_df["country"].map(country_names)
 
+        # Format the funding value for display
+        agg_df["funding_display"] = agg_df["average_funding"].apply(
+            lambda x: f"{x/1e6:.1f}M" if x >= 1e6 else f"{x/1e3:.1f}k" if x >= 1e3 else f"{x:.0f}"
+        )
+        
+        return agg_df
+
+    @render_plotly
+    def country_map():
+        df = map_data()
+        if df.empty:
+            return px.choropleth(title="No data available for selected filters")
+        
+        df["formatted_funding"] = df["average_funding"].apply(
+            lambda x: f"€{x/1e6:.1f}M" if x >= 1e6 else 
+                    f"€{x/1e3:.1f}k" if x >= 1e3 else 
+                    f"€{x:.0f}"
+        )
+        
+        df["top_topics_str"] = df["top_topics"].apply(
+            lambda x: "\n• ".join([
+                topic if i == 0 else f"• {topic}" 
+                for i, topic in enumerate(x) 
+                if topic != "not available"
+            ]) if isinstance(x, list) and any(topic != "not available" for topic in x) 
+            else "No specific topic"
+        )
+        
+        fig = px.choropleth(
+            df,
+            locations="iso_alpha",
+            color="average_funding",
+            scope="europe",
+            hover_name="country_name",
+            hover_data={
+                "formatted_funding": True,
+                "total_projects": True,
+                "top_topics_str": True,
+                "average_funding": False,
+                "iso_alpha": False,
+                "country": False
+            },
+            labels={
+                "formatted_funding": "Average Funding",
+                "total_projects": "Projects",
+                "top_topics_str": "Top Topics"
+            },
+            color_continuous_scale=px.colors.sequential.Blues
+        )
+        
+        fig.update_layout(
+            margin={"r":0,"t":0,"l":0,"b":0},
+            coloraxis_colorbar=dict(
+                title="Avg Funding",
+                tickprefix="€",
+                tickformat=",.0f"
+            )
+        )
+        
+        return fig
+    
 app = App(app_ui, server)

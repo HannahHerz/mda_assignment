@@ -6,10 +6,10 @@ import openpyxl
 
 app_dir = Path(__file__).parent
 
-df1 = pd.read_excel("MordernDataAnalytics.xlsx")
+df1 = pd.read_excel("mda_assignment/MordernDataAnalytics.xlsx")
 df1['ecSignatureDate'] =pd.to_datetime(df1['ecSignatureDate'])
 
-df2 = pd.read_excel("euroSciVoc.xlsx")
+df2 = pd.read_excel("mda_assignment/euroSciVoc.xlsx")
 df2['topic'] = df2['euroSciVocPath'].str.extract(r'^/([^/]*)/')
 df2_filtered = df2[['projectID', 'topic']]
 df2_filtered = df2_filtered.drop_duplicates(subset=['projectID'])
