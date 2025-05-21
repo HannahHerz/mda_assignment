@@ -37,10 +37,10 @@ app_ui = ui.page_fillable(
                     ),
                     ui.card(
                         ui.input_checkbox_group(
-                            "time",
-                            "Food service",
-                            ["Lunch", "Dinner"],
-                            selected=["Lunch", "Dinner"],
+                            "topic",
+                            "Topic",
+                            ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"],
+                            selected=["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"],
                             inline=True,
                         )
                     ),
@@ -143,7 +143,8 @@ def server(input, output, session):
     def filtered_data():
         year_range = input.signature_year()
         idx1 = data['ecSignatureDate'].dt.year.between(year_range[0], year_range[1])
-        return data[idx1]
+        idx2 = data['topic'].isin(input.topic())
+        return data[idx1 & idx2]
 
     @render.ui
     def total_funding():
