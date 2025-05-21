@@ -1,32 +1,30 @@
-
 import faicons as fa
 import plotly.express as px
-
-# Load data and compute static values
+import numpy as np
 from mda_assignment.shared import app_dir, tips, data
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly
 
-bill_rng = (min(tips.total_bill), max(tips.total_bill))
 
 
 ICONS = {
     "euro": fa.icon_svg("euro-sign"),
     "wallet": fa.icon_svg("wallet"),
     "contract": fa.icon_svg("file-contract"),
-    "ellipsis": fa.icon_svg("frog"),
+    "ellipsis": fa.icon_svg("cat"),
 }
 
-# Add page title and sidebar
+year_rng = (int(data['ecSignatureDate'].dt.year.min()), int(data['ecSignatureDate'].dt.year.max()))
+
 app_ui = ui.page_sidebar(
+    
     ui.sidebar(
         ui.input_slider(
-            "total_bill",
-            "Bill amount",
-            min=bill_rng[0],
-            max=bill_rng[1],
-            value=bill_rng,
-            pre="$",
+            "signature_year",
+            "Signature Year Range",
+            min=year_rng[0],
+            max=year_rng[1],
+            value=year_rng,
         ),
         ui.input_checkbox_group(
             "time",
@@ -48,7 +46,7 @@ app_ui = ui.page_sidebar(
         ),
         ui.value_box(
             "Amount of Projects",
-            ui.output_ui("average_bill"),
+            ui.output_ui("projectcount"),
             showcase=ICONS["contract"],
         ),
         fill=False,
@@ -82,7 +80,7 @@ app_ui = ui.page_sidebar(
                 ui.popover(
                     ICONS["ellipsis"],
                     ui.input_radio_buttons(
-                        "tip_perc_y",
+                        "time_contribution_y",
                         "Split by:",
                         ["sex", "smoker", "day", "time"],
                         selected="day",
@@ -92,44 +90,61 @@ app_ui = ui.page_sidebar(
                 ),
                 class_="d-flex justify-content-between align-items-center",
             ),
-            output_widget("tip_perc"),
+            output_widget("time_contribution"),
             full_screen=True,
         ),
         col_widths=[6, 6, 12],
     ),
     ui.include_css(app_dir / "styles.css"),
-    title="Restaurant tipping",
+    title="HORIZON Projects Funding",
     fillable=True,
 )
 
+#function to format large numbers
+def format_number(num):
+    """
+    Format a number with k, m, b, t suffixes for thousands, millions, billions, trillions
+    """
+    if num < 1000:
+        return str(num)
+    
+    magnitude = 0
+    suffixes = ['', 'k', 'm', 'b', 't']
+    
+    while abs(num) >= 1000 and magnitude < len(suffixes) - 1:
+        magnitude += 1
+        num /= 1000.0
+    
+    formatted = f"{num:.2f}".rstrip('0').rstrip('.') if num % 1 else f"{int(num)}"
+    return f"{formatted}{suffixes[magnitude]}"
 
 def server(input, output, session):
     @reactive.calc
-    def tips_data():
-        bill = input.total_bill()
-        idx1 = tips.total_bill.between(bill[0], bill[1])
-        idx2 = tips.time.isin(input.time())
-        return tips[idx1 & idx2]
-        
-
-    @render.ui
-    def total_tippers():
-        return f"€{tips_data().shape[0]}:.1"
+    def filtered_data():
+        year_range = input.signature_year()
+        idx1 = data['ecSignatureDate'].dt.year.between(year_range[0], year_range[1])
+        return data[idx1]
     
+    @reactive.calc
+    def tips_data():
+        idx2 = tips.time.isin(input.time())
+        return tips[idx2]
+        
     @render.ui
     def total_funding():
-        return f"€{data['ecMaxContribution'].sum():.2f} ↑"
-
+        total = format_number(filtered_data()['ecMaxContribution'].sum())
+        return f"€{total} ↑"
+        
     @render.ui
     def average_funding():
-            return f"€{data['ecMaxContribution'].mean():.2f} "
+        avg = filtered_data()['ecMaxContribution'].mean()
+        average = format_number(avg)
+        return f"€{average}"
 
     @render.ui
-    def average_bill():
-        d = tips_data()
-        if d.shape[0] > 0:
-            bill = d.total_bill.mean()
-            return f"{bill:.0f}"
+    def projectcount():
+        row_count = format_number(len(filtered_data()))
+        return f"{row_count}"
 
     @render.data_frame
     def table():
@@ -147,36 +162,52 @@ def server(input, output, session):
         )
 
     @render_plotly
-    def tip_perc():
-        from ridgeplot import ridgeplot
-
-        dat = tips_data()
-        dat["percent"] = dat.tip / dat.total_bill
-        yvar = input.tip_perc_y()
-        uvals = dat[yvar].unique()
-
-        samples = [[dat.percent[dat[yvar] == val]] for val in uvals]
-
-        plt = ridgeplot(
-            samples=samples,
-            labels=uvals,
-            bandwidth=0.01,
-            colorscale="viridis",
-            colormode="row-index",
+    def time_contribution():
+       
+        clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'ecMaxContribution'])
+      
+        clean_data['quarter'] = clean_data['ecSignatureDate'].dt.to_period('Q').astype(str)
+        clean_data['quarter'] = clean_data['quarter'].str.replace('Q', ' Q')
+        
+        # Group by quarter and calculate the sum of ecMaxContribution
+        quarterly_data = clean_data.groupby('quarter')['ecMaxContribution'].sum().reset_index()
+        
+        # Sort by quarter for chronological display
+        quarterly_data = quarterly_data.sort_values('quarter')
+        
+        # Create plot
+        fig = px.bar(
+            quarterly_data, 
+            x='quarter', 
+            y='ecMaxContribution',
+            labels={
+                'quarter': 'Quarter',
+                'ecMaxContribution': 'EC Contribution'
+            },
+            color='ecMaxContribution',
+            color_continuous_scale='Viridis'
         )
-
-        plt.update_layout(
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5
-            )
+        
+        # Layout
+        fig.update_layout(
+            xaxis_title='Quarter of Signature Date',
+            yaxis_title='EC Contribution',
+            template='plotly_white',
+            xaxis={'categoryorder': 'array', 'categoryarray': quarterly_data['quarter'].tolist()},
+            coloraxis_showscale=False
         )
-
-        return plt
+        
+        fig.update_traces(
+            texttemplate='%{y:.2s}', 
+            textposition='outside'
+        )
+        
+        return fig
 
     @reactive.effect
     @reactive.event(input.reset)
     def _():
-        ui.update_slider("total_bill", value=bill_rng)
+        ui.update_slider("signature_year", value=year_rng)
         ui.update_checkbox_group("time", selected=["Lunch", "Dinner"])
 
 
