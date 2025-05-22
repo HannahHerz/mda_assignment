@@ -1,6 +1,7 @@
 import faicons as fa
 import plotly.express as px
 import numpy as np
+import pandas as pd
 from mda_assignment.shared import app_dir, data
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly
@@ -68,12 +69,12 @@ app_ui = ui.page_fillable(
             ),
             ui.layout_columns(
                 ui.card(
-                    ui.card_header("Funding data"),
+                    ui.card_header("Funding data FILLER"),
                     ui.output_data_frame("table"),
                 ),
                 ui.card(
                     ui.card_header(
-                        "Scatterplot",
+                        "Scatterplot FILLER",
                         ui.popover(
                             ICONS["ellipsis"],
                             ui.input_radio_buttons(
@@ -128,14 +129,38 @@ app_ui = ui.page_fillable(
                 col_widths=[6, 6, 12],
             ),
         ),
-        ui.nav_panel("Predictions", "test")
+        ui.nav_panel("Predictions", 
+                     ui.layout_columns(
+                         ui.card(
+                             ui.card_header("Input"),
+                             ui.card(
+                                  ui.input_numeric("budget", "Budget in euro", 1, min=1)),
+                            ui.card(
+                                 ui.input_radio_buttons( "radio", "Topic", {"natural sciences": "Natural Sciences",
+                                    "engineering and technology": "Engineering & Tech",
+                                    "medical and health sciences": "Medical & Health",
+                                    "social sciences": "Social Sciences",
+                                    "humanities": "Humanities",
+                                    "agricultural sciences": "Agricultural Sciences",
+                                    "not available": "Not Available"})),
+                         ),
+                         ui.card(
+                             ui.value_box(
+                                 "Predicted Funding",
+                                ui.output_ui("predict"),
+                                showcase=ICONS["ellipsis"], 
+                             ) 
+                         )                    
+
+                     ),
+        )
     ),
     ui.include_css(app_dir / "styles.css"),
     fillable=True,
 )
 
 
-# Function to format large numbers
+# Function to format large numbers properly
 def format_number(num):
     """
     Format a number with k, m, b, t suffixes for thousands, millions, billions, trillions.
@@ -165,7 +190,7 @@ def server(input, output, session):
     @render.ui
     def total_funding():
         total = format_number(filtered_data()['ecMaxContribution'].sum())
-        return f"€{total} ↑"
+        return f"€{total}"
 
     @render.ui
     def average_funding():
@@ -175,8 +200,8 @@ def server(input, output, session):
 
     @render.ui
     def projectcount():
-        row_count = format_number(len(filtered_data()))
-        return f"{row_count}"
+        count = format_number(filtered_data()['projectID'].nunique())
+        return f"{count}"
 
     @render.data_frame
     def table():
@@ -215,7 +240,7 @@ def server(input, output, session):
                 'ecMaxContribution': 'EC Contribution'
             },
             color='ecMaxContribution',
-            color_continuous_scale='Viridis'
+            color_continuous_scale='Blues'
         )
 
         # Layout
@@ -367,5 +392,10 @@ def server(input, output, session):
         )
         
         return fig
+    
+    @render.ui
+    def predict():
+        total = format_number(filtered_data()['ecMaxContribution'].sum())
+        return f"€{total}"
     
 app = App(app_ui, server)
