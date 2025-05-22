@@ -17,4 +17,4 @@ data = df1.merge(df2_filtered, on='projectID', how='left')
 data['topic_y'] = data['topic_y'].fillna('not available')
 data['topic'] = data['topic_y']
 data = data.drop('topic_y', axis=1)
-print(data.head)
+
