@@ -45,7 +45,7 @@ app_ui = ui.page_fillable(
                         )
                     ),
                 ),
-                ui.input_action_button("reset", "Reset filter"),
+                ui.input_action_button("apply_filters", "Apply Filters"),
                 open="desktop",
             ),
             ui.layout_columns(
@@ -93,18 +93,6 @@ app_ui = ui.page_fillable(
                 ui.card(
                     ui.card_header(
                         "Quarterly Funding",
-                        ui.popover(
-                            ICONS["ellipsis"],
-                            ui.input_radio_buttons(
-                                "time_contribution_y",
-                                "Split by:",
-                                ["sex", "smoker", "day", "time"],
-                                selected="day",
-                                inline=True,
-                            ),
-                            title="Add a color variable",
-                        ),
-                        class_="d-flex justify-content-between align-items-center",
                     ),
                     output_widget("time_contribution"),
                     full_screen=True,
@@ -167,7 +155,7 @@ def format_number(num):
 
 
 def server(input, output, session):
-    @reactive.calc
+    @reactive.event(input.apply_filters, ignore_none=False)
     def filtered_data():
         year_range = input.signature_year()
         idx1 = data['ecSignatureDate'].dt.year.between(year_range[0], year_range[1])
