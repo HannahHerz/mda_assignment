@@ -40,13 +40,21 @@ app_ui = ui.page_fillable(
                         ui.input_checkbox_group(
                             "topic",
                             "Topic",
-                            ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"],
-                            selected=["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"],
+                                {
+                                    "natural sciences": "Natural Sciences",
+                                    "engineering and technology": "Engineering & Tech",
+                                    "medical and health sciences": "Medical & Health",
+                                    "social sciences": "Social Sciences",
+                                    "humanities": "Humanities",
+                                    "agricultural sciences": "Agricultural Sciences",
+                                    "not available": "Not Available"
+                                },
+                                selected=["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"],
                             inline=True,
                         )
                     ),
                 ),
-                ui.input_action_button("apply_filters", "Apply Filters"),
+                ui.input_action_button("reset", "Reset filter"),
                 open="desktop",
             ),
             ui.layout_columns(
@@ -103,27 +111,6 @@ app_ui = ui.page_fillable(
                 ui.card(
                     ui.card_header(
                         "Country Funding",
-                        ui.popover(
-                            ICONS["ellipsis"],
-                            ui.input_select(
-                                "map_topic",
-                                "Select Topic",
-                                {
-                                    "all": "All Topics",
-                                    "natural sciences": "Natural Sciences",
-                                    "engineering and technology": "Engineering & Tech",
-                                    "medical and health sciences": "Medical & Health",
-                                    "social sciences": "Social Sciences",
-                                    "humanities": "Humanities",
-                                    "agricultural sciences": "Agricultural Sciences",
-                                    "not available": "Not Available"
-                                },
-                                selected="all"
-                            ),
-                            title="Filter by topic",
-                            placement="top"
-                        ),
-                        class_="d-flex justify-content-between align-items-center",
                     ),
                     output_widget("country_map"),
                     full_screen=True
@@ -215,6 +202,12 @@ def server(input, output, session):
         idx2 = data['topic'].isin(input.topic())
         return data[idx1 & idx2]
 
+    @reactive.effect
+    @reactive.event(input.reset)
+    def _():
+        ui.update_slider("signature_year", value=year_rng)
+        ui.update_checkbox_group("topic", selected=["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"])
+
     @render.ui
     def total_funding():
         total = format_number(filtered_data()['ecMaxContribution'].sum())
@@ -245,8 +238,13 @@ def server(input, output, session):
             color=None if color == "none" else color,
             trendline="lowess",
         )
+<<<<<<< HEAD
 
     @render_widget
+=======
+   
+    @render_plotly
+>>>>>>> 2529d840483ea0f35dd45aba6764907860de43cf
     def time_contribution():
         clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'ecMaxContribution', 'topic'])
         clean_data['quarter'] = clean_data['ecSignatureDate'].dt.to_period('Q').astype(str)
@@ -316,12 +314,9 @@ def server(input, output, session):
 
     @reactive.calc
     def map_data():
-        # Filter by selected topic
         df = filtered_data()
-        if input.map_topic() != "all":
-            df = df[df["topic"] == input.map_topic()]
         
-        # Get European country codes (2-letter to 3-letter mapping)
+        #Country mapping & names
         country_mapping = {
             'AT': 'AUT', 'BE': 'BEL', 'BG': 'BGR', 'HR': 'HRV', 'CY': 'CYP',
             'CZ': 'CZE', 'DK': 'DNK', 'EE': 'EST', 'FI': 'FIN', 'FR': 'FRA',
@@ -364,18 +359,17 @@ def server(input, output, session):
             'CH': 'Switzerland'
         }
 
-        # Process data
         europe_df = df[df["country"].isin(country_mapping.keys())]
         if europe_df.empty:
             return pd.DataFrame()
         
-        # Calculate average funding and top topics
+        #Avg funding & total projects per country
         agg_df = europe_df.groupby("country").agg(
             average_funding=("ecMaxContribution", "mean"),
             total_projects=("projectID", "count")
         ).reset_index()
         
-        # Get top 3 topics per country
+        #Top 3 topics per country
         top_topics = {}
         for country in agg_df["country"]:
             country_data = europe_df[europe_df["country"] == country]
@@ -384,11 +378,11 @@ def server(input, output, session):
         
         agg_df["top_topics"] = agg_df["country"].map(top_topics)
         
-        # Add 3-letter country codes
+        #Country mapping
         agg_df["iso_alpha"] = agg_df["country"].map(country_mapping)
         agg_df["country_name"] = agg_df["country"].map(country_names)
 
-        # Format the funding value for display
+        #Funding format
         agg_df["funding_display"] = agg_df["average_funding"].apply(
             lambda x: f"{x/1e6:.1f}M" if x >= 1e6 else f"{x/1e3:.1f}k" if x >= 1e3 else f"{x:.0f}"
         )
@@ -416,7 +410,7 @@ def server(input, output, session):
             else "No specific topic"
         )
         
-        fig = px.choropleth(
+        map = px.choropleth(
             df,
             locations="iso_alpha",
             color="average_funding",
@@ -438,7 +432,7 @@ def server(input, output, session):
             color_continuous_scale=px.colors.sequential.Blues
         )
         
-        fig.update_layout(
+        map.update_layout(
             margin={"r":0,"t":0,"l":0,"b":0},
             coloraxis_colorbar=dict(
                 title="Avg Funding",
@@ -447,6 +441,7 @@ def server(input, output, session):
             )
         )
         
+<<<<<<< HEAD
         return fig
 
     @render_plotly
@@ -455,6 +450,10 @@ def server(input, output, session):
         fig = px.pie(data, values='ecMaxContribution', names='topic', color_discrete_sequence=px.colors.qualitative.Pastel)
         return fig
 
+=======
+        return map
+    
+>>>>>>> 2529d840483ea0f35dd45aba6764907860de43cf
     @render.ui
     def predict():
         total = format_number(filtered_data()['ecMaxContribution'].sum())
