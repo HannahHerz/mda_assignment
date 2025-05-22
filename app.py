@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from mda_assignment.shared import app_dir, data
 from shiny import App, reactive, render, ui
-from shinywidgets import output_widget, render_plotly
+from shinywidgets import output_widget, render_plotly, render_widget
 
 
 ICONS = {
@@ -74,21 +74,9 @@ app_ui = ui.page_fillable(
                 ),
                 ui.card(
                     ui.card_header(
-                        "Scatterplot FILLER",
-                        ui.popover(
-                            ICONS["ellipsis"],
-                            ui.input_radio_buttons(
-                                "scatter_color",
-                                None,
-                                ["none", "sex", "smoker", "day", "time"],
-                                inline=True,
-                            ),
-                            title="Add a color variable",
-                            placement="top",
-                        ),
-                        class_="d-flex justify-content-between align-items-center",
+                        "Distribution of Funding per Topic",
                     ),
-                    output_widget("scatterplot"),
+                    output_widget("pie"),
                     full_screen=True,
                 ),
                 ui.card(
@@ -96,19 +84,19 @@ app_ui = ui.page_fillable(
                         "Quarterly Funding",
                     ),
                     ui.popover(
-                            ICONS["ellipsis"],
-                            ui.input_select(
-                                "graph_color",
-                                "Select coloring logic",
-                                {
-                                    "funds": "Coloring based on funds",
-                                    "topics": "Coloring based on topics"
-                                },
-                                selected="funds"
-                            ),
-                            title="Filter by topic",
-                            placement="top"
+                        ICONS["ellipsis"],
+                        ui.input_select(
+                            "graph_color",
+                            "Select coloring logic",
+                            {
+                                "funds": "Coloring based on funds",
+                                "topics": "Coloring based on topics"
+                            },
+                            selected="funds"
                         ),
+                        title="Filter by topic",
+                        placement="top"
+                    ),
                     output_widget("time_contribution"),
                     full_screen=True,
                 ),
@@ -143,44 +131,56 @@ app_ui = ui.page_fillable(
                 col_widths=[6, 6, 12],
             ),
         ),
-        ui.nav_panel("Predictions", 
-                     ui.layout_columns(
-                         ui.card(
-                             ui.card_header("Input"),
-                             ui.card(ui.input_numeric("budget", "Budget in euro", 0, min=1)),
-                            ui.card(
-                                 ui.input_radio_buttons( "topicselection", "Topic", {"natural sciences": "Natural Sciences",
-                                    "engineering and technology": "Engineering & Tech",
-                                    "medical and health sciences": "Medical & Health",
-                                    "social sciences": "Social Sciences",
-                                    "humanities": "Humanities",
-                                    "agricultural sciences": "Agricultural Sciences",
-                                    "not available": "Not Available"})),
-                            ui.card(
-                                 ui.input_radio_buttons( "regionselection", "Region", {
-                                    "northern europe": "Northern Europe",
-                                    "eastern europe": "Eastern Europe",
-                                    "southern europe": "Southern Europe",
-                                    "western europe": "Western Europe",
-                                    "africa": "Africa",
-                                    "americas": "North and South America",
-                                    "asia": "Asia",
-                                    "oceania": "Oceania" })
-                                    ),
-                            ui.card(ui.input_numeric("numcountries", "Number of participating countries", 0, min=1)),
-                            ui.card(ui.input_numeric("numsme", "Number of small or medium entreprises", 0, min=0)),
-                            ui.card(ui.input_date("startdate", "Start of project")),
-                            ui.card(ui.input_date("enddate", "Expected end of project")),
-                         ),
-                         ui.card(
-                             ui.value_box(
-                                 "Predicted Funding",
-                                ui.output_ui("predict"),
-                                showcase=ICONS["ellipsis"], 
-                             ) 
-                         )                    
-
-                     ),
+        ui.nav_panel(
+            "Predictions",
+            ui.layout_columns(
+                ui.card(
+                    ui.card_header("Input"),
+                    ui.card(ui.input_numeric("budget", "Budget in euro", 0, min=1)),
+                    ui.card(
+                        ui.input_radio_buttons(
+                            "topicselection", 
+                            "Topic", 
+                            {
+                                "natural sciences": "Natural Sciences",
+                                "engineering and technology": "Engineering & Tech",
+                                "medical and health sciences": "Medical & Health",
+                                "social sciences": "Social Sciences",
+                                "humanities": "Humanities",
+                                "agricultural sciences": "Agricultural Sciences",
+                                "not available": "Not Available"
+                            }
+                        )
+                    ),
+                    ui.card(
+                        ui.input_radio_buttons(
+                            "regionselection", 
+                            "Region", 
+                            {
+                                "northern europe": "Northern Europe",
+                                "eastern europe": "Eastern Europe",
+                                "southern europe": "Southern Europe",
+                                "western europe": "Western Europe",
+                                "africa": "Africa",
+                                "americas": "North and South America",
+                                "asia": "Asia",
+                                "oceania": "Oceania"
+                            }
+                        )
+                    ),
+                    ui.card(ui.input_numeric("numcountries", "Number of participating countries", 0, min=1)),
+                    ui.card(ui.input_numeric("numsme", "Number of small or medium entreprises", 0, min=0)),
+                    ui.card(ui.input_date("startdate", "Start of project")),
+                    ui.card(ui.input_date("enddate", "Expected end of project")),
+                ),
+                ui.card(
+                    ui.value_box(
+                        "Predicted Funding",
+                        ui.output_ui("predict"),
+                        showcase=ICONS["ellipsis"],
+                    )
+                )
+            ),
         )
     ),
     ui.include_css(app_dir / "styles.css"),
@@ -246,10 +246,8 @@ def server(input, output, session):
             trendline="lowess",
         )
 
-   
-    @render_plotly
+    @render_widget
     def time_contribution():
-
         clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'ecMaxContribution', 'topic'])
         clean_data['quarter'] = clean_data['ecSignatureDate'].dt.to_period('Q').astype(str)
         clean_data['quarter'] = clean_data['quarter'].str.replace('Q', ' Q')
@@ -450,10 +448,16 @@ def server(input, output, session):
         )
         
         return fig
-    
+
+    @render_plotly
+    def pie():
+        data = filtered_data()
+        fig = px.pie(data, values='ecMaxContribution', names='topic', color_discrete_sequence=px.colors.qualitative.Pastel)
+        return fig
+
     @render.ui
     def predict():
         total = format_number(filtered_data()['ecMaxContribution'].sum())
         return f"€{total}"
-    
+
 app = App(app_ui, server)
