@@ -95,6 +95,20 @@ app_ui = ui.page_fillable(
                     ui.card_header(
                         "Quarterly Funding",
                     ),
+                    ui.popover(
+                            ICONS["ellipsis"],
+                            ui.input_select(
+                                "graph_color",
+                                "Select coloring logic",
+                                {
+                                    "funds": "Coloring based on funds",
+                                    "topics": "Coloring based on topics"
+                                },
+                                selected="funds"
+                            ),
+                            title="Filter by topic",
+                            placement="top"
+                        ),
                     output_widget("time_contribution"),
                     full_screen=True,
                 ),
@@ -133,16 +147,30 @@ app_ui = ui.page_fillable(
                      ui.layout_columns(
                          ui.card(
                              ui.card_header("Input"),
-                             ui.card(
-                                  ui.input_numeric("budget", "Budget in euro", 1, min=1)),
+                             ui.card(ui.input_numeric("budget", "Budget in euro", 0, min=1)),
                             ui.card(
-                                 ui.input_radio_buttons( "radio", "Topic", {"natural sciences": "Natural Sciences",
+                                 ui.input_radio_buttons( "topicselection", "Topic", {"natural sciences": "Natural Sciences",
                                     "engineering and technology": "Engineering & Tech",
                                     "medical and health sciences": "Medical & Health",
                                     "social sciences": "Social Sciences",
                                     "humanities": "Humanities",
                                     "agricultural sciences": "Agricultural Sciences",
                                     "not available": "Not Available"})),
+                            ui.card(
+                                 ui.input_radio_buttons( "regionselection", "Region", {
+                                    "northern europe": "Northern Europe",
+                                    "eastern europe": "Eastern Europe",
+                                    "southern europe": "Southern Europe",
+                                    "western europe": "Western Europe",
+                                    "africa": "Africa",
+                                    "americas": "North and South America",
+                                    "asia": "Asia",
+                                    "oceania": "Oceania" })
+                                    ),
+                            ui.card(ui.input_numeric("numcountries", "Number of participating countries", 0, min=1)),
+                            ui.card(ui.input_numeric("numsme", "Number of small or medium entreprises", 0, min=0)),
+                            ui.card(ui.input_date("startdate", "Start of project")),
+                            ui.card(ui.input_date("enddate", "Expected end of project")),
                          ),
                          ui.card(
                              ui.value_box(
@@ -218,19 +246,22 @@ def server(input, output, session):
             trendline="lowess",
         )
 
+   
     @render_plotly
     def time_contribution():
-        clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'ecMaxContribution'])
+
+        clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'ecMaxContribution', 'topic'])
         clean_data['quarter'] = clean_data['ecSignatureDate'].dt.to_period('Q').astype(str)
         clean_data['quarter'] = clean_data['quarter'].str.replace('Q', ' Q')
 
-        # Group by quarter and calculate the sum of ecMaxContribution
+        # For the first chart (by quarter only)
         quarterly_data = clean_data.groupby('quarter')['ecMaxContribution'].sum().reset_index()
-
-        # Sort by quarter for chronological display
         quarterly_data = quarterly_data.sort_values('quarter')
 
-        # Create plot
+        # For the second chart (by quarter and topic)
+        quarterly_topic_data = clean_data.groupby(['quarter', 'topic'])['ecMaxContribution'].sum().reset_index()
+        quarterly_topic_data = quarterly_topic_data.sort_values('quarter')
+        
         fig = px.bar(
             quarterly_data,
             x='quarter',
@@ -243,7 +274,6 @@ def server(input, output, session):
             color_continuous_scale='Blues'
         )
 
-        # Layout
         fig.update_layout(
             xaxis_title='Quarter of Signature Date',
             yaxis_title='EC Contribution',
@@ -256,7 +286,35 @@ def server(input, output, session):
             texttemplate='%{y:.2s}',
             textposition='outside'
         )
-        return fig
+        
+        fig2 = px.bar(
+            quarterly_topic_data,
+            x='quarter',
+            y='ecMaxContribution',
+            labels={
+                'quarter': 'Quarter',
+                'ecMaxContribution': 'EC Contribution'
+            },
+            color='topic',
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+
+        fig2.update_layout(
+            xaxis_title='Quarter of Signature Date',
+            yaxis_title='EC Contribution',
+            template='plotly_white',
+            xaxis={'categoryorder': 'array', 'categoryarray': quarterly_topic_data['quarter'].unique().tolist()},
+        )
+
+        fig2.update_traces(
+            texttemplate='%{y:.2s}',
+            textposition='outside'
+        )
+        
+        if input.graph_color() == "funds":
+            return fig
+        if input.graph_color() == "topics":
+            return fig2
 
     @reactive.calc
     def map_data():
