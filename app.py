@@ -54,7 +54,7 @@ app_ui = ui.page_fillable(
                         )
                     ),
                 ),
-                ui.input_action_button("reset", "Reset filter"),
+                ui.input_action_button("apply_filters", "Apply filters"),
                 open="desktop",
             ),
             ui.layout_columns(
@@ -77,14 +77,14 @@ app_ui = ui.page_fillable(
             ),
             ui.layout_columns(
                 ui.card(
-                    ui.card_header("Funding data FILLER"),
-                    ui.output_data_frame("table"),
+                    ui.card_header("Distribution of Amount of Projects per Topic"),
+                    output_widget("pie_projects"),
                 ),
                 ui.card(
                     ui.card_header(
                         "Distribution of Funding per Topic",
                     ),
-                    output_widget("pie"),
+                    output_widget("pie_funding"),
                     full_screen=True,
                 ),
                 ui.card(
@@ -238,13 +238,8 @@ def server(input, output, session):
             color=None if color == "none" else color,
             trendline="lowess",
         )
-<<<<<<< HEAD
 
-    @render_widget
-=======
-   
     @render_plotly
->>>>>>> 2529d840483ea0f35dd45aba6764907860de43cf
     def time_contribution():
         clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'ecMaxContribution', 'topic'])
         clean_data['quarter'] = clean_data['ecSignatureDate'].dt.to_period('Q').astype(str)
@@ -441,19 +436,24 @@ def server(input, output, session):
             )
         )
         
-<<<<<<< HEAD
+        return map
+    
+    @render_plotly
+    def pie_funding():
+        data = filtered_data()
+        fig = px.pie(data, values='ecMaxContribution', names='topic', color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig.update_traces(textposition='inside', textinfo='percent+label')
         return fig
 
     @render_plotly
-    def pie():
+    def pie_projects():
         data = filtered_data()
-        fig = px.pie(data, values='ecMaxContribution', names='topic', color_discrete_sequence=px.colors.qualitative.Pastel)
+        topic_counts = data['topic'].value_counts().reset_index()
+        topic_counts.columns = ['topic', 'count']
+        fig = px.pie(topic_counts, values='count', names='topic', color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig.update_traces(textposition='inside', textinfo='percent+label')
         return fig
 
-=======
-        return map
-    
->>>>>>> 2529d840483ea0f35dd45aba6764907860de43cf
     @render.ui
     def predict():
         total = format_number(filtered_data()['ecMaxContribution'].sum())
