@@ -40,21 +40,22 @@ app_ui = ui.page_fillable(
                         ui.input_checkbox_group(
                             "topic",
                             "Topic",
-                                {
-                                    "natural sciences": "Natural Sciences",
-                                    "engineering and technology": "Engineering & Tech",
-                                    "medical and health sciences": "Medical & Health",
-                                    "social sciences": "Social Sciences",
-                                    "humanities": "Humanities",
-                                    "agricultural sciences": "Agricultural Sciences",
-                                    "not available": "Not Available"
-                                },
-                                selected=["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"],
+                            {
+                                "natural sciences": "Natural Sciences",
+                                "engineering and technology": "Engineering & Tech",
+                                "medical and health sciences": "Medical & Health",
+                                "social sciences": "Social Sciences",
+                                "humanities": "Humanities",
+                                "agricultural sciences": "Agricultural Sciences",
+                                "not available": "Not Available"
+                            },
+                            selected=["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"],
                             inline=True,
                         )
                     ),
                 ),
                 ui.input_action_button("apply_filters", "Apply filters"),
+                ui.input_action_button("reset", "Reset filters (press apply to confirm reset)"),
                 open="desktop",
             ),
             ui.layout_columns(
@@ -287,7 +288,16 @@ def server(input, output, session):
                 'ecMaxContribution': 'EC Contribution'
             },
             color='topic',
-            color_discrete_sequence=px.colors.qualitative.Pastel
+            color_discrete_map={
+                "natural sciences": px.colors.qualitative.Pastel[4],
+                "engineering and technology": px.colors.qualitative.Pastel[2],
+                "medical and health sciences": px.colors.qualitative.Pastel[3],
+                "social sciences": px.colors.qualitative.Pastel[5],
+                "humanities": px.colors.qualitative.Pastel[0],
+                "agricultural sciences": px.colors.qualitative.Pastel[1],
+                "not available": px.colors.qualitative.Pastel[10]
+            },
+            category_orders={"topic": ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"]}
         )
 
         fig2.update_layout(
@@ -392,8 +402,8 @@ def server(input, output, session):
         
         df["formatted_funding"] = df["average_funding"].apply(
             lambda x: f"€{x/1e6:.1f}M" if x >= 1e6 else 
-                    f"€{x/1e3:.1f}k" if x >= 1e3 else 
-                    f"€{x:.0f}"
+                      f"€{x/1e3:.1f}k" if x >= 1e3 else 
+                      f"€{x:.0f}"
         )
         
         df["top_topics_str"] = df["top_topics"].apply(
@@ -441,7 +451,18 @@ def server(input, output, session):
     @render_plotly
     def pie_funding():
         data = filtered_data()
-        fig = px.pie(data, values='ecMaxContribution', names='topic', color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig = px.pie(data, values='ecMaxContribution', names='topic', color='topic',
+                     color_discrete_map={
+                         "natural sciences": px.colors.qualitative.Pastel[4],
+                         "engineering and technology": px.colors.qualitative.Pastel[2],
+                         "medical and health sciences": px.colors.qualitative.Pastel[3],
+                         "social sciences": px.colors.qualitative.Pastel[5],
+                         "humanities": px.colors.qualitative.Pastel[0],
+                         "agricultural sciences": px.colors.qualitative.Pastel[1],
+                         "not available": px.colors.qualitative.Pastel[10]
+                     },
+                     category_orders={"topic": ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"]}
+                     )
         fig.update_traces(textposition='inside', textinfo='percent+label')
         return fig
 
@@ -450,7 +471,17 @@ def server(input, output, session):
         data = filtered_data()
         topic_counts = data['topic'].value_counts().reset_index()
         topic_counts.columns = ['topic', 'count']
-        fig = px.pie(topic_counts, values='count', names='topic', color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig = px.pie(topic_counts, values='count', names='topic', color='topic',
+                     color_discrete_map={
+                         "natural sciences": px.colors.qualitative.Pastel[4],
+                         "engineering and technology": px.colors.qualitative.Pastel[2],
+                         "medical and health sciences": px.colors.qualitative.Pastel[3],
+                         "social sciences": px.colors.qualitative.Pastel[5],
+                         "humanities": px.colors.qualitative.Pastel[0],
+                         "agricultural sciences": px.colors.qualitative.Pastel[1],
+                         "not available": px.colors.qualitative.Pastel[10]
+                     },
+                     category_orders={"topic": ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"]})
         fig.update_traces(textposition='inside', textinfo='percent+label')
         return fig
 
