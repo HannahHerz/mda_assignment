@@ -78,16 +78,19 @@ app_ui = ui.page_fillable(
             ),
             ui.layout_columns(
                 ui.card(
-                    ui.card_header("Distribution of Amount of Projects per Topic"),
-                    output_widget("pie_projects"),
-                ),
-                ui.card(
                     ui.card_header(
                         "Distribution of Funding per Topic",
                     ),
                     output_widget("pie_funding"),
-                    full_screen=True,
+                    full_screen=True
                 ),
+
+                ui.card(
+                    ui.card_header("Distribution of Amount of Projects per Topic"),
+                    output_widget("pie_projects"),
+                    full_screen=True
+                ),
+            ),
                 ui.card(
                     ui.card_header(
                         "Quarterly Funding",
@@ -109,6 +112,16 @@ app_ui = ui.page_fillable(
                     output_widget("time_contribution"),
                     full_screen=True,
                 ),
+
+                ui.card(
+                    ui.card_header(
+                        "Quarterly Topic",
+                    ),
+                    
+                    output_widget("time_topics"),
+                    full_screen=True,
+                ),
+
                 ui.card(
                     ui.card_header(
                         "Country Funding",
@@ -116,8 +129,7 @@ app_ui = ui.page_fillable(
                     output_widget("country_map"),
                     full_screen=True
                 ),
-                col_widths=[6, 6, 12],
-            ),
+                
         ),
         ui.nav_panel(
             "Predictions",
@@ -225,20 +237,20 @@ def server(input, output, session):
         count = format_number(filtered_data()['projectID'].nunique())
         return f"{count}"
 
-    @render.data_frame
-    def table():
-        return render.DataGrid(filtered_data())
+    @reactive.calc
+    def colormap():
+       return {"natural sciences": px.colors.qualitative.Pastel[4],
+                "engineering and technology": px.colors.qualitative.Pastel[2],
+                "medical and health sciences": px.colors.qualitative.Pastel[3],
+                "social sciences": px.colors.qualitative.Pastel[5],
+                "humanities": px.colors.qualitative.Pastel[0],
+                "agricultural sciences": px.colors.qualitative.Pastel[1],
+                "not available": px.colors.qualitative.Pastel[10]}
+    
+    @reactive.calc 
+    def catorder():
+        return {"topic": ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"]}
 
-    @render_plotly
-    def scatterplot():
-        color = input.scatter_color()
-        return px.scatter(
-            filtered_data(),
-            x="ecMaxContribution",
-            y="ecContribution_sum",
-            color=None if color == "none" else color,
-            trendline="lowess",
-        )
 
     @render_plotly
     def time_contribution():
@@ -288,16 +300,8 @@ def server(input, output, session):
                 'ecMaxContribution': 'EC Contribution'
             },
             color='topic',
-            color_discrete_map={
-                "natural sciences": px.colors.qualitative.Pastel[4],
-                "engineering and technology": px.colors.qualitative.Pastel[2],
-                "medical and health sciences": px.colors.qualitative.Pastel[3],
-                "social sciences": px.colors.qualitative.Pastel[5],
-                "humanities": px.colors.qualitative.Pastel[0],
-                "agricultural sciences": px.colors.qualitative.Pastel[1],
-                "not available": px.colors.qualitative.Pastel[10]
-            },
-            category_orders={"topic": ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"]}
+            color_discrete_map= colormap(),
+            category_orders= catorder()
         )
 
         fig2.update_layout(
@@ -317,6 +321,43 @@ def server(input, output, session):
         if input.graph_color() == "topics":
             return fig2
 
+    @render_plotly
+    def time_topics():
+        clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'topic'])
+        clean_data['quarter'] = clean_data['ecSignatureDate'].dt.to_period('Q').astype(str)
+        clean_data['quarter'] = clean_data['quarter'].str.replace('Q', ' Q')
+
+        quarterly_topic_data = clean_data.groupby(['quarter', 'topic']).size().reset_index(name='count')
+        quarterly_topic_data = quarterly_topic_data.sort_values('quarter')
+        
+        fig = px.bar(
+            quarterly_topic_data,
+            x='quarter',
+            y='count',
+            labels={
+                'quarter': 'Quarter',
+                'count': 'Number of Projects'
+            },
+            color='topic',
+            color_discrete_map= colormap(),
+            category_orders= catorder()
+        )
+
+        fig.update_layout(
+            xaxis_title='Quarter of Signature Date',
+            yaxis_title='Number of Projects',
+            template='plotly_white',
+            xaxis={'categoryorder': 'array', 'categoryarray': quarterly_topic_data['quarter'].unique().tolist()},
+        )
+
+        fig.update_traces(
+            texttemplate='%{y}',
+            textposition='outside'
+        )
+
+        return fig
+        
+      
     @reactive.calc
     def map_data():
         df = filtered_data()
@@ -452,16 +493,8 @@ def server(input, output, session):
     def pie_funding():
         data = filtered_data()
         fig = px.pie(data, values='ecMaxContribution', names='topic', color='topic',
-                     color_discrete_map={
-                         "natural sciences": px.colors.qualitative.Pastel[4],
-                         "engineering and technology": px.colors.qualitative.Pastel[2],
-                         "medical and health sciences": px.colors.qualitative.Pastel[3],
-                         "social sciences": px.colors.qualitative.Pastel[5],
-                         "humanities": px.colors.qualitative.Pastel[0],
-                         "agricultural sciences": px.colors.qualitative.Pastel[1],
-                         "not available": px.colors.qualitative.Pastel[10]
-                     },
-                     category_orders={"topic": ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"]}
+                     color_discrete_map= colormap(),
+                     category_orders= catorder()
                      )
         fig.update_traces(textposition='inside', textinfo='percent+label')
         return fig
@@ -472,16 +505,9 @@ def server(input, output, session):
         topic_counts = data['topic'].value_counts().reset_index()
         topic_counts.columns = ['topic', 'count']
         fig = px.pie(topic_counts, values='count', names='topic', color='topic',
-                     color_discrete_map={
-                         "natural sciences": px.colors.qualitative.Pastel[4],
-                         "engineering and technology": px.colors.qualitative.Pastel[2],
-                         "medical and health sciences": px.colors.qualitative.Pastel[3],
-                         "social sciences": px.colors.qualitative.Pastel[5],
-                         "humanities": px.colors.qualitative.Pastel[0],
-                         "agricultural sciences": px.colors.qualitative.Pastel[1],
-                         "not available": px.colors.qualitative.Pastel[10]
-                     },
-                     category_orders={"topic": ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"]})
+                     color_discrete_map= colormap(),
+                     category_orders= catorder()
+                     )
         fig.update_traces(textposition='inside', textinfo='percent+label')
         return fig
 
