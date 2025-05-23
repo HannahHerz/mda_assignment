@@ -2,10 +2,12 @@ import faicons as fa
 import plotly.express as px
 import numpy as np
 import pandas as pd
+import re
+import matplotlib.pyplot as plt
+from wordcloud import STOPWORDS, WordCloud
 from mda_assignment.shared import app_dir, data
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly, render_widget
-
 
 ICONS = {
     "euro": fa.icon_svg("euro-sign"),
@@ -129,13 +131,27 @@ app_ui = ui.page_fillable(
                     output_widget("country_map"),
                     full_screen=True
                 ),
+
+                ui.card(
+                    ui.card_header(
+                        "Wordcloud of objectives"
+                    ),
+                    ui.output_plot("wordcloud")
+                )
                 
         ),
         ui.nav_panel(
             "Predictions",
-            ui.layout_columns(
+            ui.card(
+                    ui.value_box(
+                        "Predicted Funding",
+                        ui.output_ui("predict"),
+                        showcase=ICONS["wallet"],
+                    )
+                ),
                 ui.card(
                     ui.card_header("Input"),
+                    ui.layout_columns(
                     ui.card(ui.input_numeric("budget", "Budget in euro", 0, min=1)),
                     ui.card(
                         ui.input_radio_buttons(
@@ -170,16 +186,12 @@ app_ui = ui.page_fillable(
                     ),
                     ui.card(ui.input_numeric("numcountries", "Number of participating countries", 0, min=1)),
                     ui.card(ui.input_numeric("numsme", "Number of small or medium entreprises", 0, min=0)),
-                    ui.card(ui.input_date("startdate", "Start of project")),
-                    ui.card(ui.input_date("enddate", "Expected end of project")),
+            
+                    ui.card(ui.input_date("startdate", "Start of project"),
+                    ui.input_date("enddate", "Expected end of project")),
                 ),
-                ui.card(
-                    ui.value_box(
-                        "Predicted Funding",
-                        ui.output_ui("predict"),
-                        showcase=ICONS["wallet"],
-                    )
-                )
+                ui.input_action_button("predict_button", "Calculate predicted funding")
+                
             ),
         )
     ),
@@ -515,5 +527,28 @@ def server(input, output, session):
     def predict():
         total = format_number(filtered_data()['ecMaxContribution'].sum())
         return f"€{total}"
+    
+
+
+
+    @render.plot
+    def wordcloud():
+        df = filtered_data()
+        text = ' '.join(df['objective'].astype(str).tolist())
+
+        text = re.sub(r'[^A-Za-z\s]', '', text)
+
+        text = text.lower()
+
+        stopwords = set(STOPWORDS)
+        text = ' '.join(word for word in text.split() if word not in stopwords)
+
+        wordcloud = WordCloud(background_color='white', max_words=50).generate(text)
+        plt.figure(figsize=(10, 5))
+        plt.imshow(wordcloud, interpolation='bilinear')
+        plt.axis('off')  
+        plt.title("IMDB Movie Reviews Word Cloud")
+        return plt.gcf()
+   
 
 app = App(app_ui, server)
