@@ -11,7 +11,7 @@ ICONS = {
     "euro": fa.icon_svg("euro-sign"),
     "wallet": fa.icon_svg("wallet"),
     "contract": fa.icon_svg("file-contract"),
-    "ellipsis": fa.icon_svg("frog"),
+    "ellipsis": fa.icon_svg("ellipsis"),
 }
 
 year_rng = (
@@ -177,7 +177,7 @@ app_ui = ui.page_fillable(
                     ui.value_box(
                         "Predicted Funding",
                         ui.output_ui("predict"),
-                        showcase=ICONS["ellipsis"],
+                        showcase=ICONS["wallet"],
                     )
                 )
             ),
