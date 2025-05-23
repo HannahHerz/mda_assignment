@@ -134,7 +134,7 @@ app_ui = ui.page_fillable(
 
                 ui.card(
                     ui.card_header(
-                        "Wordcloud of objectives"
+                        "Word cloud of objectives"
                     ),
                     ui.output_plot("wordcloud")
                 )
@@ -541,13 +541,14 @@ def server(input, output, session):
         text = text.lower()
 
         stopwords = set(STOPWORDS)
+        custom_stopwords = {'project', 'will'}
+        stopwords.update(custom_stopwords)    
         text = ' '.join(word for word in text.split() if word not in stopwords)
 
-        wordcloud = WordCloud(background_color='white', max_words=50).generate(text)
-        plt.figure(figsize=(10, 5))
+        wordcloud = WordCloud(background_color='white', max_words=75).generate(text)
+      
         plt.imshow(wordcloud, interpolation='bilinear')
-        plt.axis('off')  
-        plt.title("IMDB Movie Reviews Word Cloud")
+        plt.axis('off')
         return plt.gcf()
    
 
