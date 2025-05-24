@@ -155,21 +155,24 @@ app_ui = ui.page_fillable(
                     ui.card(ui.input_numeric("budget", "Budget in euro", 0, min=1)),
                     ui.card(
                         ui.input_radio_buttons(
-                            "topicselection", 
-                            "Topic", 
+                            "objectives", 
+                            "Objective", 
                             {
-                                "natural sciences": "Natural Sciences",
-                                "engineering and technology": "Engineering & Tech",
-                                "medical and health sciences": "Medical & Health",
-                                "social sciences": "Social Sciences",
-                                "humanities": "Humanities",
-                                "agricultural sciences": "Agricultural Sciences",
-                                "not available": "Not Available"
+                                "obj_1": "Advanced Engery Storage Materials",
+                                "obj_2": "Academic Researcher Training",
+                                "obj_3": "EU Climate Policy Data",
+                                "obj_4": "Molecular Synthetic Biology",
+                                "obj_5": "Clinical Cancer Cell Biology",
+                                "obj_6": "Industrial Sustainable Energy",
+                                "obj_7": "Global Environmental Change",
+                                "obj_8": "Social and Cultural Studies",
+                                "obj_9": "Theoretical Quantum Physics",
+                                "obj_10": "Digital Health and AI"
                             }
                         )
                     ),
                     ui.card(
-                        ui.input_radio_buttons(
+                        ui.input_checkbox_group(
                             "regionselection", 
                             "Region", 
                             {
@@ -182,11 +185,14 @@ app_ui = ui.page_fillable(
                                 "asia": "Asia",
                                 "oceania": "Oceania"
                             }
-                        )
+                        ),
+                        ui.input_numeric("numcountries", "Number of Participating Countries", 1, min=1)
                     ),
-                    ui.card(ui.input_numeric("numcountries", "Number of participating countries", 0, min=1)),
-                    ui.card(ui.input_numeric("numsme", "Number of small or medium entreprises", 0, min=0)),
-            
+                    ui.card(
+                    ui.input_numeric("numsme", "Number of Small or Medium Entreprises", 0, min=0),
+                    ui.input_numeric("numpartner", "Number of Partners", 0, min=0),
+                    ui.input_numeric("numthirdparties", "Number of Third Parties", 0, min=0),
+                    ui.input_numeric("numasspartners", "Number of Associated Partners", 0, min=0)),
                     ui.card(ui.input_date("startdate", "Start of project"),
                     ui.input_date("enddate", "Expected end of project")),
                 ),
@@ -544,9 +550,7 @@ def server(input, output, session):
         custom_stopwords = {'project', 'will'}
         stopwords.update(custom_stopwords)    
         text = ' '.join(word for word in text.split() if word not in stopwords)
-
         wordcloud = WordCloud(background_color='white', max_words=75).generate(text)
-      
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis('off')
         return plt.gcf()
