@@ -140,14 +140,19 @@ app_ui = ui.page_fillable(
                     full_screen=True
                 )
             ),
-
+            ui.layout_columns(
                 ui.card(
                     ui.card_header(
                         "Word cloud of objectives"
                     ),
                     ui.output_plot("wordcloud")
+                ),
+                ui.card(
+                    ui.card_header("EU vs Total Funding Distribution"),
+                    output_widget("funding_donut_diagram"),
+                    full_screen=True
                 )
-                
+            )
         ),
         ui.nav_panel(
             "Predictions",
@@ -504,20 +509,20 @@ def server(input, output, session):
 
     @render_plotly
     def avg_country_map():
-        df = map_data()
-        if df.empty:
+        mapdata = map_data()
+        if mapdata.empty:
             return px.choropleth(title="No data available for selected filters")
         
-        df["formatted_avg_funding"] = df["average_funding"].apply(
+        mapdata["formatted_avg_funding"] = mapdata["average_funding"].apply(
             lambda x: f"€{format_number(x)}"
         )
         
-        df["top_topics_str"] = df["top_topics"].apply(format_topics)
+        mapdata["top_topics_str"] = mapdata["top_topics"].apply(format_topics)
         
-        max_avg_funding = df["average_funding"].max()
+        max_avg_funding = mapdata["average_funding"].max()
 
         map = px.choropleth(
-            df,
+            mapdata,
             locations="iso_alpha",
             color="average_funding",
             scope="europe",
@@ -556,23 +561,23 @@ def server(input, output, session):
 
     @render_plotly
     def total_country_map():
-        df = map_data()
-        if df.empty:
+        mapdata = map_data()
+        if mapdata.empty:
             return px.choropleth(title="No data available for selected filters")
         
         # Calculate total funding per country
-        df["total_funding"] = df["average_funding"] * df["total_projects"]
+        mapdata["total_funding"] = mapdata["average_funding"] * mapdata["total_projects"]
         
-        df["formatted_total_funding"] = df["total_funding"].apply(
+        mapdata["formatted_total_funding"] = mapdata["total_funding"].apply(
             lambda x: f"€{format_number(x)}"
         )
         
-        df["top_topics_str"] = df["top_topics"].apply(format_topics)
+        mapdata["top_topics_str"] = mapdata["top_topics"].apply(format_topics)
         
-        max_total_funding = df["total_funding"].max()
+        max_total_funding = mapdata["total_funding"].max()
 
         map = px.choropleth(
-            df,
+            mapdata,
             locations="iso_alpha",
             color="total_funding",
             scope="europe",
@@ -611,8 +616,8 @@ def server(input, output, session):
     
     @render.plot
     def wordcloud():
-        df = filtered_data()
-        text = ' '.join(df['objective'].astype(str).tolist())
+        wc = filtered_data()
+        text = ' '.join(wc['objective'].astype(str).tolist())
 
         text = re.sub(r'[^A-Za-z\s]', '', text)
 
@@ -627,10 +632,79 @@ def server(input, output, session):
         plt.axis('off')
         return plt.gcf()
    
-
     @render.ui
     def predict():
         total = format_number(filtered_data()['ecMaxContribution'].sum())
         return f"€{total}"
+
+    @render_plotly
+    def funding_donut_diagram():
+        dd = filtered_data()
+        
+        #Avg per project
+        avg_eu_funding = dd['ecMaxContribution'].mean()
+        avg_total_cost = dd['totalCost'].mean()
+        
+        avg_non_eu_funding = avg_total_cost - avg_eu_funding
+        
+        funding_data = pd.DataFrame({
+            'source': ['EU Contribution', 'Other Sources'],
+            'amount': [avg_eu_funding, avg_non_eu_funding],
+            'percentage': [
+                (avg_eu_funding / avg_total_cost) * 100,
+                (avg_non_eu_funding / avg_total_cost) * 100
+            ]
+        })
+        
+        #Donut diagram
+        fig = px.pie(
+            funding_data,
+            values='amount',
+            names='source',
+            color='source',
+            color_discrete_map={
+                'EU Contribution': '#003399',
+                'Other Sources': '#FFD700'
+            },
+            hole=0.6
+        )
+        
+        fig.update_traces(hoverinfo='skip', hovertemplate=None)
+
+        fig.update_traces(
+            textposition='inside',
+            textinfo='percent',
+            textfont_size=12,
+            marker=dict(line=dict(color='white', width=2))
+        )
+        
+        #Middle text
+        fig.add_annotation(
+            text=f"Avg per project<br>€{format_number(avg_total_cost)}",
+            x=0.5, y=0.5,
+            font_size=16,
+            showarrow=False,
+            font_color="black"
+        )
+        
+        #Title & legend
+        fig.update_layout(
+            title={
+                'text': f"Average EU funding vs other sources per project<br>EU: {funding_data.iloc[0]['percentage']:.1f}% of average project cost",
+                'x': 0.5,
+                'xanchor': 'center'
+            },
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.2,
+                xanchor="center",
+                x=0.5
+            ),
+        margin=dict(t=100, b=60, l=20, r=20)
+        )
+        
+        return fig
 
 app = App(app_ui, server)
