@@ -21,6 +21,15 @@ year_rng = (
     int(data['ecSignatureDate'].dt.year.max())
 )
 
+topics = {"natural sciences": "Natural Sciences",
+          "engineering and technology": "Engineering & Tech",
+          "medical and health sciences": "Medical & Health",
+          "social sciences": "Social Sciences",
+          "humanities": "Humanities",
+          "agricultural sciences": "Agricultural Sciences",
+          "not available": "Not Available"
+          }
+
 app_ui = ui.page_fillable(
     ui.input_dark_mode(),
     ui.navset_pill(
@@ -42,15 +51,7 @@ app_ui = ui.page_fillable(
                         ui.input_checkbox_group(
                             "topic",
                             "Topic",
-                            {
-                                "natural sciences": "Natural Sciences",
-                                "engineering and technology": "Engineering & Tech",
-                                "medical and health sciences": "Medical & Health",
-                                "social sciences": "Social Sciences",
-                                "humanities": "Humanities",
-                                "agricultural sciences": "Agricultural Sciences",
-                                "not available": "Not Available"
-                            },
+                            topics,
                             selected=["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"],
                             inline=True,
                         )
@@ -86,7 +87,6 @@ app_ui = ui.page_fillable(
                     output_widget("pie_funding"),
                     full_screen=True
                 ),
-
                 ui.card(
                     ui.card_header("Distribution of Amount of Projects per Topic"),
                     output_widget("pie_projects"),
@@ -114,23 +114,30 @@ app_ui = ui.page_fillable(
                     output_widget("time_contribution"),
                     full_screen=True,
                 ),
-
                 ui.card(
                     ui.card_header(
                         "Quarterly Topic",
                     ),
-                    
                     output_widget("time_topics"),
                     full_screen=True,
                 ),
 
+            ui.layout_columns(
                 ui.card(
                     ui.card_header(
-                        "Country Funding",
+                        "Avg country Funding",
                     ),
-                    output_widget("country_map"),
+                    output_widget("avg_country_map"),
                     full_screen=True
                 ),
+                ui.card(
+                    ui.card_header(
+                        "Total country funding",
+                    ),
+                    output_widget("total_country_map"),
+                    full_screen=True
+                )
+            ),
 
                 ui.card(
                     ui.card_header(
@@ -196,15 +203,13 @@ app_ui = ui.page_fillable(
                     ui.card(ui.input_date("startdate", "Start of project"),
                     ui.input_date("enddate", "Expected end of project")),
                 ),
-                ui.input_action_button("predict_button", "Calculate predicted funding")
-                
+                ui.input_action_button("predict_button", "Calculate predicted funding")  
             ),
-        )
+        ),
     ),
-    ui.include_css(app_dir / "styles.css"),
-    fillable=True,
+ui.include_css(app_dir / "styles.css"),
+fillable=True,
 )
-
 
 # Function to format large numbers properly
 def format_number(num):
@@ -223,6 +228,27 @@ def format_number(num):
 
     formatted = f"{num:.2f}".rstrip('0').rstrip('.') if num % 1 else f"{int(num)}"
     return f"{formatted}{suffixes[magnitude]}"
+
+#Format topics for mapping
+def format_topics(topics_list):
+    if not isinstance(topics_list, list):
+        return "No specific topic"
+    
+    #Filter out "not available"
+    valid_topics = [topic for topic in topics_list if topic != "not available"]
+    
+    if not valid_topics:
+        return "No specific topic"
+    
+    #Format topics
+    formatted_topics = []
+    for i, topic in enumerate(valid_topics):
+        if i == 0:
+            formatted_topics.append(topic)  # First topic without bullet
+        else:
+            formatted_topics.append(f"• {topic}")  # Subsequent topics with bullet
+    
+    return "\n".join(formatted_topics)
 
 
 def server(input, output, session):
@@ -448,32 +474,25 @@ def server(input, output, session):
 
         #Funding format
         agg_df["funding_display"] = agg_df["average_funding"].apply(
-            lambda x: f"{x/1e6:.1f}M" if x >= 1e6 else f"{x/1e3:.1f}k" if x >= 1e3 else f"{x:.0f}"
+            lambda x: f"€{format_number(x)}"
         )
         
         return agg_df
 
     @render_plotly
-    def country_map():
+    def avg_country_map():
         df = map_data()
         if df.empty:
             return px.choropleth(title="No data available for selected filters")
         
-        df["formatted_funding"] = df["average_funding"].apply(
-            lambda x: f"€{x/1e6:.1f}M" if x >= 1e6 else 
-                      f"€{x/1e3:.1f}k" if x >= 1e3 else 
-                      f"€{x:.0f}"
+        df["formatted_avg_funding"] = df["average_funding"].apply(
+            lambda x: f"€{format_number(x)}"
         )
         
-        df["top_topics_str"] = df["top_topics"].apply(
-            lambda x: "\n• ".join([
-                topic if i == 0 else f"• {topic}" 
-                for i, topic in enumerate(x) 
-                if topic != "not available"
-            ]) if isinstance(x, list) and any(topic != "not available" for topic in x) 
-            else "No specific topic"
-        )
+        df["top_topics_str"] = df["top_topics"].apply(format_topics)
         
+        max_avg_funding = df["average_funding"].max()
+
         map = px.choropleth(
             df,
             locations="iso_alpha",
@@ -481,7 +500,7 @@ def server(input, output, session):
             scope="europe",
             hover_name="country_name",
             hover_data={
-                "formatted_funding": True,
+                "formatted_avg_funding": True,
                 "total_projects": True,
                 "top_topics_str": True,
                 "average_funding": False,
@@ -489,19 +508,77 @@ def server(input, output, session):
                 "country": False
             },
             labels={
-                "formatted_funding": "Average Funding",
+                "formatted_avg_funding": "Avg Funding",
                 "total_projects": "Projects",
                 "top_topics_str": "Top Topics"
             },
-            color_continuous_scale=px.colors.sequential.Blues
+            color_continuous_scale=px.colors.sequential.Blues,
+            range_color=[0, max_avg_funding]
         )
         
+        num_ticks = 6
+        tick_avg_values = [i * (max_avg_funding / (num_ticks - 1)) for i in range(num_ticks)]
+        tick_avg_labels = [f"€{format_number(val)}" for val in tick_avg_values]
+
         map.update_layout(
             margin={"r":0,"t":0,"l":0,"b":0},
             coloraxis_colorbar=dict(
-                title="Avg Funding",
-                tickprefix="€",
-                tickformat=",.0f"
+                tickvals=tick_avg_values,
+                ticktext=tick_avg_labels
+            )
+        )
+        
+        return map
+
+    @render_plotly
+    def total_country_map():
+        df = map_data()
+        if df.empty:
+            return px.choropleth(title="No data available for selected filters")
+        
+        # Calculate total funding per country
+        df["total_funding"] = df["average_funding"] * df["total_projects"]
+        
+        df["formatted_total_funding"] = df["total_funding"].apply(
+            lambda x: f"€{format_number(x)}"
+        )
+        
+        df["top_topics_str"] = df["top_topics"].apply(format_topics)
+        
+        max_total_funding = df["total_funding"].max()
+
+        map = px.choropleth(
+            df,
+            locations="iso_alpha",
+            color="total_funding",
+            scope="europe",
+            hover_name="country_name",
+            hover_data={
+                "formatted_total_funding": True,
+                "total_projects": True,
+                "top_topics_str": True,
+                "total_funding": False,
+                "iso_alpha": False,
+                "country": False
+            },
+            labels={
+                "formatted_total_funding": "Total Funding",
+                "total_projects": "Projects",
+                "top_topics_str": "Top Topics"
+            },
+            color_continuous_scale=px.colors.sequential.Blues,
+            range_color=[0, max_total_funding]
+        )
+        
+        num_ticks = 6
+        tick_total_values = [i * (max_total_funding / (num_ticks - 1)) for i in range(num_ticks)]
+        tick_total_labels = [f"€{format_number(val)}" for val in tick_total_values]
+
+        map.update_layout(
+            margin={"r":0,"t":0,"l":0,"b":0},
+            coloraxis_colorbar=dict(
+                tickvals=tick_total_values,
+                ticktext=tick_total_labels
             )
         )
         
@@ -533,27 +610,5 @@ def server(input, output, session):
     def predict():
         total = format_number(filtered_data()['ecMaxContribution'].sum())
         return f"€{total}"
-    
-
-
-
-    @render.plot
-    def wordcloud():
-        df = filtered_data()
-        text = ' '.join(df['objective'].astype(str).tolist())
-
-        text = re.sub(r'[^A-Za-z\s]', '', text)
-
-        text = text.lower()
-
-        stopwords = set(STOPWORDS)
-        custom_stopwords = {'project', 'will'}
-        stopwords.update(custom_stopwords)    
-        text = ' '.join(word for word in text.split() if word not in stopwords)
-        wordcloud = WordCloud(background_color='white', max_words=75).generate(text)
-        plt.imshow(wordcloud, interpolation='bilinear')
-        plt.axis('off')
-        return plt.gcf()
-   
 
 app = App(app_ui, server)
