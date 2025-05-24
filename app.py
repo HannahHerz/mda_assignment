@@ -13,7 +13,8 @@ ICONS = {
     "euro": fa.icon_svg("euro-sign"),
     "wallet": fa.icon_svg("wallet"),
     "contract": fa.icon_svg("file-contract"),
-    "ellipsis": fa.icon_svg("ellipsis"),
+    "palette": fa.icon_svg("palette"),
+    "calculator": fa.icon_svg("calculator")
 }
 
 year_rng = (
@@ -45,6 +46,7 @@ app_ui = ui.page_fillable(
                             min=year_rng[0],
                             max=year_rng[1],
                             value=year_rng,
+                            sep=''
                         )
                     ),
                     ui.card(
@@ -98,7 +100,7 @@ app_ui = ui.page_fillable(
                         "Quarterly Funding",
                     ),
                     ui.popover(
-                        ICONS["ellipsis"],
+                        ICONS["palette"],
                         ui.input_select(
                             "graph_color",
                             "Select coloring logic",
@@ -125,14 +127,14 @@ app_ui = ui.page_fillable(
             ui.layout_columns(
                 ui.card(
                     ui.card_header(
-                        "Avg country Funding",
+                        "Average Funding per Country",
                     ),
                     output_widget("avg_country_map"),
                     full_screen=True
                 ),
                 ui.card(
                     ui.card_header(
-                        "Total country funding",
+                        "Total Funding per Country",
                     ),
                     output_widget("total_country_map"),
                     full_screen=True
@@ -153,7 +155,7 @@ app_ui = ui.page_fillable(
                     ui.value_box(
                         "Predicted Funding",
                         ui.output_ui("predict"),
-                        showcase=ICONS["wallet"],
+                        showcase=ICONS["calculator"],
                     )
                 ),
                 ui.card(
@@ -295,6 +297,27 @@ def server(input, output, session):
     def catorder():
         return {"topic": ["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"]}
 
+    @render_plotly
+    def pie_funding():
+        data = filtered_data()
+        fig = px.pie(data, values='ecMaxContribution', names='topic', color='topic',
+                     color_discrete_map= colormap(),
+                     category_orders= catorder()
+                     )
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        return fig
+
+    @render_plotly
+    def pie_projects():
+        data = filtered_data()
+        topic_counts = data['topic'].value_counts().reset_index()
+        topic_counts.columns = ['topic', 'count']
+        fig = px.pie(topic_counts, values='count', names='topic', color='topic',
+                     color_discrete_map= colormap(),
+                     category_orders= catorder()
+                     )
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        return fig
 
     @render_plotly
     def time_contribution():
@@ -510,7 +533,8 @@ def server(input, output, session):
             labels={
                 "formatted_avg_funding": "Avg Funding",
                 "total_projects": "Projects",
-                "top_topics_str": "Top Topics"
+                "top_topics_str": "Top Topics",
+                "average_funding": "Average Funding"
             },
             color_continuous_scale=px.colors.sequential.Blues,
             range_color=[0, max_avg_funding]
@@ -564,7 +588,8 @@ def server(input, output, session):
             labels={
                 "formatted_total_funding": "Total Funding",
                 "total_projects": "Projects",
-                "top_topics_str": "Top Topics"
+                "top_topics_str": "Top Topics",
+                "total_funding": "Total Funding"
             },
             color_continuous_scale=px.colors.sequential.Blues,
             range_color=[0, max_total_funding]
@@ -584,27 +609,24 @@ def server(input, output, session):
         
         return map
     
-    @render_plotly
-    def pie_funding():
-        data = filtered_data()
-        fig = px.pie(data, values='ecMaxContribution', names='topic', color='topic',
-                     color_discrete_map= colormap(),
-                     category_orders= catorder()
-                     )
-        fig.update_traces(textposition='inside', textinfo='percent+label')
-        return fig
+    @render.plot
+    def wordcloud():
+        df = filtered_data()
+        text = ' '.join(df['objective'].astype(str).tolist())
 
-    @render_plotly
-    def pie_projects():
-        data = filtered_data()
-        topic_counts = data['topic'].value_counts().reset_index()
-        topic_counts.columns = ['topic', 'count']
-        fig = px.pie(topic_counts, values='count', names='topic', color='topic',
-                     color_discrete_map= colormap(),
-                     category_orders= catorder()
-                     )
-        fig.update_traces(textposition='inside', textinfo='percent+label')
-        return fig
+        text = re.sub(r'[^A-Za-z\s]', '', text)
+
+        text = text.lower()
+
+        stopwords = set(STOPWORDS)
+        custom_stopwords = {'project', 'will'}
+        stopwords.update(custom_stopwords)    
+        text = ' '.join(word for word in text.split() if word not in stopwords)
+        wordcloud = WordCloud(background_color='white', max_words=75).generate(text)
+        plt.imshow(wordcloud, interpolation='bilinear')
+        plt.axis('off')
+        return plt.gcf()
+   
 
     @render.ui
     def predict():
