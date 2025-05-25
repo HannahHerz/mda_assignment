@@ -346,16 +346,14 @@ def server(input, output, session):
                 'quarter': 'Quarter',
                 'ecMaxContribution': 'EC Contribution'
             },
-            color='ecMaxContribution',
-            color_continuous_scale='Blues'
+            color_discrete_sequence=['#003399']
         )
 
         fig.update_layout(
             xaxis_title='Quarter of Signature Date',
             yaxis_title='EC Contribution',
             template='plotly_white',
-            xaxis={'categoryorder': 'array', 'categoryarray': quarterly_data['quarter'].tolist()},
-            coloraxis_showscale=False
+            xaxis={'categoryorder': 'array', 'categoryarray': quarterly_data['quarter'].tolist()}
         )
 
         fig.update_traces(
@@ -680,9 +678,9 @@ def server(input, output, session):
         
         #Middle text
         fig.add_annotation(
-            text=f"Avg per project<br>€{format_number(avg_total_cost)}",
+            text=f"Average per project<br>€{format_number(avg_total_cost)}",
             x=0.5, y=0.5,
-            font_size=16,
+            font_size=14,
             showarrow=False,
             font_color="black"
         )
