@@ -290,13 +290,13 @@ def server(input, output, session):
 
     @reactive.calc
     def colormap():
-       return {"natural sciences": px.colors.qualitative.Pastel[4],
-                "engineering and technology": px.colors.qualitative.Pastel[2],
-                "medical and health sciences": px.colors.qualitative.Pastel[3],
-                "social sciences": px.colors.qualitative.Pastel[5],
-                "humanities": px.colors.qualitative.Pastel[0],
-                "agricultural sciences": px.colors.qualitative.Pastel[1],
-                "not available": px.colors.qualitative.Pastel[10]}
+       return {"natural sciences": px.colors.qualitative.D3[2],
+                "engineering and technology": px.colors.qualitative.D3[1],
+                "medical and health sciences": px.colors.qualitative.D3[3],
+                "social sciences": px.colors.qualitative.D3[0],
+                "humanities": px.colors.qualitative.G10[4],
+                "agricultural sciences": px.colors.qualitative.D3[5],
+                "not available": px.colors.qualitative.D3[7]}
     
     @reactive.calc 
     def catorder():
