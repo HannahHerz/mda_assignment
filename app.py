@@ -148,7 +148,7 @@ app_ui = ui.page_fillable(
             ui.layout_columns(
                 ui.card(
                     ui.card_header(
-                        "Word cloud of objectives"
+                        "Word cloud of Objectives"
                     ),
                     ui.output_plot("wordcloud")
                 ),
@@ -161,7 +161,6 @@ app_ui = ui.page_fillable(
         ),
         ui.nav_panel(
             "Predictions",
-            ui.card( ui.output_text_verbatim("predict")),
             ui.card(
                     ui.value_box(
                         "Predicted Funding",
@@ -173,16 +172,18 @@ app_ui = ui.page_fillable(
                     ui.card_header("Input"),
                     ui.layout_columns(
                     ui.card(
-                        ui.layout_columns(
+                        
                         ui.input_radio_buttons(
                             "euroSciVoxTopic", 
                             "Topic", 
                             topics                        
                         ),
-                        ui.input_textarea("objective", "Project Objective",
-                                          placeholder="Paste your project objective here…",
-                                          rows=4
-                                          )),
+                         ui.input_text("masterCall", "Funding Call",
+                                          placeholder="Paste your funding call here"
+                                          ),
+                        ui.input_text("objective", "Project Objective",
+                                          placeholder="Paste your project objective here"
+                                          ),
                         ui.input_select("fundingScheme", "Funding Scheme",
                                         {
                                         'HORIZON-TMA-MSCA-PF-EF': 'HORIZON-TMA-MSCA-PF-EF',
@@ -751,47 +752,59 @@ def server(input, output, session):
         
         return fig    
 
-    @reactive.event(input.predict_button)
+    @reactive.calc
     def make_prediction_inputs():
         start = pd.to_datetime(input.startDate(), dayfirst=True)
         end   = pd.to_datetime(input.endDate(),   dayfirst=True)
         dur   = (end - start).days
 
         return {
-            "start_date":          input.startDate(),
-            "duration_days":       dur,
-            "n_participant":       input.n_participant(),
-            "n_associatedPartner": input.n_associatedPartner(),
-            "n_thirdParty":        input.n_thirdParty(),
-            "num_organisations":   input.num_organisations(),
-            "num_sme":             input.num_sme(),
-            "fundingScheme":       input.fundingScheme(),
-            "masterCall":          input.masterCall(),
-            "euroSciVoxTopic":     input.euroSciVoxTopic(),
-            "objective":           input.objective(),
-            "countries":           input.countries(),
-            "organisationID":      input.organisationID(),
+            "start_date":              input.startDate(),
+            "duration_days":           dur,
+            "n_participant":           input.n_participant(),
+            "n_associatedPartner":     input.n_associatedPartner(),
+            "n_thirdParty":            input.n_thirdParty(),
+            "num_organisations":       input.num_organisations(),
+            "num_sme":                 input.num_sme(),
+            "fundingScheme":           input.fundingScheme(),
+            "euroSciVoxTopic":         input.euroSciVoxTopic(),
+            "objective":               input.objective(),
+            "organisationID":          input.organisationID(),
+            "masterCall":              input.masterCall(),
+            # Include the country counts
+            "Northern_Europe_count":   input.Northern_Europe_count(),
+            "Eastern_Europe_count":    input.Eastern_Europe_count(),
+            "Southern_Europe_count":   input.Southern_Europe_count(),
+            "Western_Europe_count":    input.Western_Europe_count(),
+            "Americas_count":          input.Americas_count(),
+            "Asia_count":              input.Asia_count(),
+            "Africa_count":            input.Africa_count(),
+            "Oceania_count":           input.Oceania_count(),
+            "num_countries":           input.num_countries(),
         }
 
-    @output.predict
     @render.text
-    def predict_text():
+    @reactive.event(input.predict_button)
+    def predict():
+        """Text output for the prediction card"""
         inp = make_prediction_inputs()
         try:
             p = predict_funding(inp)
-            return f"→ Predicted EC funding: {p:,.0f}€"
+            return f"Predicted EC funding: €{p:,.0f}"
         except Exception as e:
             return f"Error: {e}"
 
-    @output.predict2
+    
     @render.ui
-    def predict_value_box():
+    @reactive.event(input.predict_button)
+    def predict2():
+        """Value box output for predicted funding"""
         inp = make_prediction_inputs()
         try:
             p = predict_funding(inp)
-            # use your format_number helper if you like
-            return f"{format_number(p)}€"
-        except:
-            return ""
+            formatted_prediction = format_number(p)
+            return f"€{formatted_prediction}"
+        except Exception as e:
+            return "Error"
 
 app = App(app_ui, server)
