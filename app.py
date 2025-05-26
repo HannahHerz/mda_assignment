@@ -9,12 +9,14 @@ from mda_assignment.shared import app_dir, data
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly, render_widget
 
+
 ICONS = {
     "euro": fa.icon_svg("euro-sign"),
     "wallet": fa.icon_svg("wallet"),
     "contract": fa.icon_svg("file-contract"),
     "magnifying-glass": fa.icon_svg("magnifying-glass"),
-    "calculator": fa.icon_svg("calculator")
+    "calculator": fa.icon_svg("calculator"),
+    "github": fa.icon_svg("github")
 }
 
 year_rng = (
@@ -31,8 +33,11 @@ topics = {"natural sciences": "Natural Sciences",
           "not available": "Not Available"
           }
 
+url = 'https://github.com/HannahHerz/mda_assignment'
+
 app_ui = ui.page_fillable(
     ui.input_dark_mode(),
+    ui.tags.a(ICONS['github'], href=url, target="_blank", style="font-size: 30px; text-align: right;"),
     ui.navset_pill(
         ui.nav_panel(
             "Dashboard",
@@ -60,7 +65,6 @@ app_ui = ui.page_fillable(
                     ),
                 ),
                 ui.input_action_button("apply_filters", "Apply filters"),
-                #ui.input_action_button("reset", "Reset filters (press apply to confirm reset)"),
                 open="desktop",
             ),
             ui.layout_columns(
@@ -156,60 +160,113 @@ app_ui = ui.page_fillable(
         ),
         ui.nav_panel(
             "Predictions",
+            ui.card( ui.output_text_verbatim("predict")),
             ui.card(
                     ui.value_box(
                         "Predicted Funding",
-                        ui.output_ui("predict"),
+                        ui.output_ui("predict2"),
                         showcase=ICONS["calculator"],
                     )
                 ),
                 ui.card(
                     ui.card_header("Input"),
                     ui.layout_columns(
-                    ui.card(ui.input_numeric("budget", "Budget in euro", 0, min=1)),
                     ui.card(
+                        ui.layout_columns(
                         ui.input_radio_buttons(
-                            "objectives", 
+                            "euroSciVoxTopic", 
+                            "Topic", 
+                            topics                        
+                        ),
+                        ui.input_radio_buttons(
+                            "objective", 
                             "Objective", 
                             {
-                                "obj_1": "Advanced Engery Storage Materials",
-                                "obj_2": "Academic Researcher Training",
-                                "obj_3": "EU Climate Policy Data",
-                                "obj_4": "Molecular Synthetic Biology",
-                                "obj_5": "Clinical Cancer Cell Biology",
-                                "obj_6": "Industrial Sustainable Energy",
-                                "obj_7": "Global Environmental Change",
-                                "obj_8": "Social and Cultural Studies",
-                                "obj_9": "Theoretical Quantum Physics",
-                                "obj_10": "Digital Health and AI"
-                            }
-                        )
+                                "obj_advanced_energy_storage_materials": "Advanced Engery Storage Materials",
+                                "obj_researcher_academic_training": "Academic Researcher Training",
+                                "obj_eu_climate_policy_data": "EU Climate Policy Data",
+                                "obj_molecular_synthetic_biology": "Molecular Synthetic Biology",
+                                "obj_clinical_cell_cancer_biology": "Clinical Cancer Cell Biology",
+                                "obj_industrial_sustainable_energy": "Industrial Sustainable Energy",
+                                "obj_global_environmental_change": "Global Environmental Change",
+                                "obj_social_cultural_studies": "Social and Cultural Studies",
+                                "obj_quantum_theoretical_physics": "Theoretical Quantum Physics",
+                                "obj_digital_health_ai": "Digital Health and AI"
+                            }                        
+                        )),
+                        ui.input_select("fundingScheme", "Funding Scheme",
+                                        {
+                                        'HORIZON-TMA-MSCA-PF-EF': 'HORIZON-TMA-MSCA-PF-EF',
+                                        'HORIZON-ERC': 'HORIZON-ERC',
+                                        'HORIZON-RIA': 'HORIZON-RIA',
+                                        'HORIZON-CSA': 'HORIZON-CSA',
+                                        'HORIZON-IA': 'HORIZON-IA',
+                                        'HORIZON-ERC-POC': 'HORIZON-ERC-POC',
+                                        'HORIZON-EIC': 'HORIZON-EIC',
+                                        'HORIZON-EIC-ACC-BF': 'HORIZON-EIC-ACC-BF',
+                                        'HORIZON-TMA-MSCA-PF-GF': 'HORIZON-TMA-MSCA-PF-GF',
+                                        'HORIZON-TMA-MSCA-DN': 'HORIZON-TMA-MSCA-DN',
+                                        'HORIZON-JU-RIA': 'HORIZON-JU-RIA',
+                                        'HORIZON-TMA-MSCA-SE': 'HORIZON-TMA-MSCA-SE',
+                                        'HORIZON-JU-IA': 'HORIZON-JU-IA',
+                                        'HORIZON-ERC-SYG': 'HORIZON-ERC-SYG',
+                                        'HORIZON-AG': 'HORIZON-AG',
+                                        'HORIZON-EIC-ACC': 'HORIZON-EIC-ACC',
+                                        'ERC': 'ERC',
+                                        'HORIZON-TMA-MSCA-Cofund-P': 'HORIZON-TMA-MSCA-Cofund-P',
+                                        'HORIZON-TMA-MSCA-DN-ID': 'HORIZON-TMA-MSCA-DN-ID',
+                                        'HORIZON-TMA-MSCA-Cofund-D': 'HORIZON-TMA-MSCA-Cofund-D',
+                                        'HORIZON-JU-CSA': 'HORIZON-JU-CSA',
+                                        'HORIZON-TMA-MSCA-DN-JD': 'HORIZON-TMA-MSCA-DN-JD',
+                                        'EURATOM-RIA': 'EURATOM-RIA',
+                                        'HORIZON-COFUND': 'HORIZON-COFUND',
+                                        'MSCA-PF': 'MSCA-PF',
+                                        'HORIZON-AG-UN': 'HORIZON-AG-UN',
+                                        'HORIZON-EIT-KIC': 'HORIZON-EIT-KIC',
+                                        'EURATOM-CSA': 'EURATOM-CSA',
+                                        'EURATOM-IA': 'EURATOM-IA',
+                                        'ERC-POC': 'ERC-POC',
+                                        'HORIZON-AG-LS': 'HORIZON-AG-LS',
+                                        'EIC-ACC': 'EIC-ACC',
+                                        'CSA': 'CSA',
+                                        'HORIZON-PCP': 'HORIZON-PCP',
+                                        'EURATOM-COFUND': 'EURATOM-COFUND',
+                                        'RIA': 'RIA',
+                                        'EIC': 'EIC',
+                                        'IA': 'IA'
+   
+                                        })
                     ),
                     ui.card(
-                        ui.input_checkbox_group(
-                            "regionselection", 
-                            "Region", 
-                            {
-                                "northern europe": "Northern Europe",
-                                "eastern europe": "Eastern Europe",
-                                "southern europe": "Southern Europe",
-                                "western europe": "Western Europe",
-                                "africa": "Africa",
-                                "americas": "North and South America",
-                                "asia": "Asia",
-                                "oceania": "Oceania"
-                            }
-                        ),
-                        ui.input_numeric("numcountries", "Number of Participating Countries", 1, min=1)
-                    ),
+                        ui.card_header("Region"),
+                        ui.layout_columns(
+                        ui.input_numeric("Northern_Europe_count", "Number of Participating Countries from Northern Europe", 0, min=0),
+                        ui.input_numeric("Eastern_Europe_count", "Number of Participating Countries from Eastern Europe", 0, min=0),
+                        ui.input_numeric("Southern_Europe_count", "Number of Participating Countries from Southern Europe", 0, min=0)),
+                        ui.layout_columns(
+                        ui.input_numeric("Western_Europe_count", "Number of Participating Countries from Western Europe", 0, min=0),
+                        ui.input_numeric("Africa_count", "Number of Participating Countries from Africa", 0, min=0),
+                        ui.input_numeric("Americas_count", "Number of Participating Countries from North and South America", 0, min=0)),
+                        ui.layout_columns(
+                        ui.input_numeric("Asia_count", "Number of Participating Countries from Asia", 0, min=0),
+                        ui.input_numeric("Oceania_count", "Number of Participating Countries from Oceania", 0, min=0),
+                        ui.input_numeric("num_countries", "Number of Total Participating Countries", 1, min=1))
+                    )),
+                    ui.layout_columns(
                     ui.card(
-                    ui.input_numeric("numsme", "Number of Small or Medium Entreprises", 0, min=0),
-                    ui.input_numeric("numpartner", "Number of Partners", 0, min=0),
-                    ui.input_numeric("numthirdparties", "Number of Third Parties", 0, min=0),
-                    ui.input_numeric("numasspartners", "Number of Associated Partners", 0, min=0)),
-                    ui.card(ui.input_date("startdate", "Start of project"),
-                    ui.input_date("enddate", "Expected end of project")),
-                ),
+                    ui.layout_columns(
+                    ui.input_text("organisationID", "Organization ID"),
+                    ui.input_numeric("n_participant", "Number of Participants", 1, min=1),
+                    ui.input_numeric("num_organisations", "Number of Organizations involved", 1, min=1)),
+                    ui.layout_columns(
+                    ui.input_numeric("num_sme", "Number of Small or Medium Entreprises", 0, min=0),
+                    ui.input_numeric("n_thirdParty", "Number of Third Parties", 0, min=0),
+                    ui.input_numeric("n_associatedPartner", "Number of Associated Partners", 0, min=0))),
+                    ),
+
+                ui.card(ui.layout_columns(ui.input_date("startDate", "Start of project"),
+                ui.input_date("endDate", "Expected end of project"))),
+                
                 ui.input_action_button("predict_button", "Calculate predicted funding")  
             ),
         ),
@@ -265,12 +322,6 @@ def server(input, output, session):
         idx1 = data['ecSignatureDate'].dt.year.between(year_range[0], year_range[1])
         idx2 = data['topic'].isin(input.topic())
         return data[idx1 & idx2]
-
-    @reactive.effect
-    @reactive.event(input.reset)
-    def _():
-        ui.update_slider("signature_year", value=year_rng)
-        ui.update_checkbox_group("topic", selected=["natural sciences", "engineering and technology", "medical and health sciences", "social sciences", "humanities", "agricultural sciences", "not available"])
 
     @render.ui
     def total_funding():
@@ -639,10 +690,7 @@ def server(input, output, session):
         plt.axis('off')
         return plt.gcf()
    
-    @render.ui
-    def predict():
-        total = format_number(filtered_data()['ecMaxContribution'].sum())
-        return f"€{total}"
+    
 
     @render_plotly
     def funding_donut_diagram():
@@ -713,5 +761,19 @@ def server(input, output, session):
         )
         
         return fig
+    
+
+    @reactive.calc
+    def funding_data():
+        df = pd.DataFrame(["euroSciVoxTopic", "objective", "fundingScheme", "Northern_Europe_count", "Eastern_Europe_count", "Southern_Europe_count", "Western_Europe_count", "Africa_count", "Americas_count", "Asia_count", "Oceania_count", "num_countries", "organisationID", "n_participant", "num_organisations", "num_sme", "n_thirdParty", "n_associatedPartner", "startDate", "endDate"])
+        return df
+
+    @reactive.event(input.predict_button)
+    def predict():
+        from mda_assignment.model import loaded_model
+        y = loaded_model.predict(funding_data)
+        return f"€{y[1]}"
+
+
 
 app = App(app_ui, server)
