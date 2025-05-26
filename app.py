@@ -8,6 +8,7 @@ from wordcloud import STOPWORDS, WordCloud
 from mda_assignment.shared import app_dir, data
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly, render_widget
+from model import predict_funding
 
 
 ICONS = {
@@ -178,22 +179,10 @@ app_ui = ui.page_fillable(
                             "Topic", 
                             topics                        
                         ),
-                        ui.input_radio_buttons(
-                            "objective", 
-                            "Objective", 
-                            {
-                                "obj_advanced_energy_storage_materials": "Advanced Engery Storage Materials",
-                                "obj_researcher_academic_training": "Academic Researcher Training",
-                                "obj_eu_climate_policy_data": "EU Climate Policy Data",
-                                "obj_molecular_synthetic_biology": "Molecular Synthetic Biology",
-                                "obj_clinical_cell_cancer_biology": "Clinical Cancer Cell Biology",
-                                "obj_industrial_sustainable_energy": "Industrial Sustainable Energy",
-                                "obj_global_environmental_change": "Global Environmental Change",
-                                "obj_social_cultural_studies": "Social and Cultural Studies",
-                                "obj_quantum_theoretical_physics": "Theoretical Quantum Physics",
-                                "obj_digital_health_ai": "Digital Health and AI"
-                            }                        
-                        )),
+                        ui.input_textarea("objective", "Project Objective",
+                                          placeholder="Paste your project objective here…",
+                                          rows=4
+                                          )),
                         ui.input_select("fundingScheme", "Funding Scheme",
                                         {
                                         'HORIZON-TMA-MSCA-PF-EF': 'HORIZON-TMA-MSCA-PF-EF',
@@ -760,20 +749,49 @@ def server(input, output, session):
         margin=dict(t=100, b=60, l=20, r=20)
         )
         
-        return fig
-    
-
-    @reactive.calc
-    def funding_data():
-        df = pd.DataFrame(["euroSciVoxTopic", "objective", "fundingScheme", "Northern_Europe_count", "Eastern_Europe_count", "Southern_Europe_count", "Western_Europe_count", "Africa_count", "Americas_count", "Asia_count", "Oceania_count", "num_countries", "organisationID", "n_participant", "num_organisations", "num_sme", "n_thirdParty", "n_associatedPartner", "startDate", "endDate"])
-        return df
+        return fig    
 
     @reactive.event(input.predict_button)
-    def predict():
-        from mda_assignment.model import loaded_model
-        y = loaded_model.predict(funding_data)
-        return f"€{y[1]}"
+    def make_prediction_inputs():
+        start = pd.to_datetime(input.startDate(), dayfirst=True)
+        end   = pd.to_datetime(input.endDate(),   dayfirst=True)
+        dur   = (end - start).days
 
+        return {
+            "start_date":          input.startDate(),
+            "duration_days":       dur,
+            "n_participant":       input.n_participant(),
+            "n_associatedPartner": input.n_associatedPartner(),
+            "n_thirdParty":        input.n_thirdParty(),
+            "num_organisations":   input.num_organisations(),
+            "num_sme":             input.num_sme(),
+            "fundingScheme":       input.fundingScheme(),
+            "masterCall":          input.masterCall(),
+            "euroSciVoxTopic":     input.euroSciVoxTopic(),
+            "objective":           input.objective(),
+            "countries":           input.countries(),
+            "organisationID":      input.organisationID(),
+        }
 
+    @output.predict
+    @render.text
+    def predict_text():
+        inp = make_prediction_inputs()
+        try:
+            p = predict_funding(inp)
+            return f"→ Predicted EC funding: {p:,.0f}€"
+        except Exception as e:
+            return f"Error: {e}"
+
+    @output.predict2
+    @render.ui
+    def predict_value_box():
+        inp = make_prediction_inputs()
+        try:
+            p = predict_funding(inp)
+            # use your format_number helper if you like
+            return f"{format_number(p)}€"
+        except:
+            return ""
 
 app = App(app_ui, server)
