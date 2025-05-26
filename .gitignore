@@ -1,1 +1,4 @@
 DataCleaning
+"*.csv"     
+"*.ipynb"   
+"train_enriched/" 
