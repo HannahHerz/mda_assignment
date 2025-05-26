@@ -13,7 +13,7 @@ ICONS = {
     "euro": fa.icon_svg("euro-sign"),
     "wallet": fa.icon_svg("wallet"),
     "contract": fa.icon_svg("file-contract"),
-    "palette": fa.icon_svg("palette"),
+    "magnifying-glass": fa.icon_svg("magnifying-glass"),
     "calculator": fa.icon_svg("calculator")
 }
 
@@ -60,7 +60,7 @@ app_ui = ui.page_fillable(
                     ),
                 ),
                 ui.input_action_button("apply_filters", "Apply filters"),
-                ui.input_action_button("reset", "Reset filters (press apply to confirm reset)"),
+                #ui.input_action_button("reset", "Reset filters (press apply to confirm reset)"),
                 open="desktop",
             ),
             ui.layout_columns(
@@ -100,7 +100,7 @@ app_ui = ui.page_fillable(
                         "Quarterly Funding",
                     ),
                     ui.popover(
-                        ICONS["palette"],
+                        ICONS["magnifying-glass"],
                         ui.input_select(
                             "graph_color",
                             "Select coloring logic",
@@ -251,9 +251,9 @@ def format_topics(topics_list):
     formatted_topics = []
     for i, topic in enumerate(valid_topics):
         if i == 0:
-            formatted_topics.append(topic)  # First topic without bullet
+            formatted_topics.append(topic)
         else:
-            formatted_topics.append(f"• {topic}")  # Subsequent topics with bullet
+            formatted_topics.append(f"• {topic}")
     
     return "\n".join(formatted_topics)
 
@@ -290,13 +290,14 @@ def server(input, output, session):
 
     @reactive.calc
     def colormap():
-       return {"natural sciences": px.colors.qualitative.D3[2],
-                "engineering and technology": px.colors.qualitative.D3[1],
-                "medical and health sciences": px.colors.qualitative.D3[3],
-                "social sciences": px.colors.qualitative.D3[0],
-                "humanities": px.colors.qualitative.G10[4],
-                "agricultural sciences": px.colors.qualitative.D3[5],
-                "not available": px.colors.qualitative.D3[7]}
+       topic_keys = list(topics.keys())
+       return {topic_keys[0]: px.colors.qualitative.D3[2],
+               topic_keys[1]: px.colors.qualitative.D3[1],
+               topic_keys[2]: px.colors.qualitative.D3[3],
+               topic_keys[3]: px.colors.qualitative.D3[0],
+               topic_keys[4]: px.colors.qualitative.G10[4],
+               topic_keys[5]: px.colors.qualitative.D3[5],
+               topic_keys[6]: px.colors.qualitative.D3[7]}
     
     @reactive.calc 
     def catorder():
@@ -304,22 +305,24 @@ def server(input, output, session):
 
     @render_plotly
     def pie_funding():
-        data = filtered_data()
-        fig = px.pie(data, values='ecMaxContribution', names='topic', color='topic',
+        data = filtered_data().copy()
+        data['topic_display'] = data['topic'].map(topics)
+        fig = px.pie(data, values='ecMaxContribution', names='topic_display', color='topic',
                      color_discrete_map= colormap(),
-                     category_orders= catorder()
+                     category_orders= {"topic_display": list(topics.values())}
                      )
         fig.update_traces(textposition='inside', textinfo='percent+label')
         return fig
 
     @render_plotly
     def pie_projects():
-        data = filtered_data()
-        topic_counts = data['topic'].value_counts().reset_index()
-        topic_counts.columns = ['topic', 'count']
-        fig = px.pie(topic_counts, values='count', names='topic', color='topic',
-                     color_discrete_map= colormap(),
-                     category_orders= catorder()
+        data = filtered_data().copy()
+        data['topic_display'] = data['topic'].map(topics)
+        topic_counts = data['topic_display'].value_counts().reset_index()
+        topic_counts.columns = ['topic_display', 'count']
+        fig = px.pie(topic_counts, values='count', names='topic_display', color='topic_display',
+                     color_discrete_map= {topics[i]: c for i, c in colormap().items()},
+                     category_orders= {"topic_display": list(topics.values())}
                      )
         fig.update_traces(textposition='inside', textinfo='percent+label')
         return fig
@@ -338,6 +341,8 @@ def server(input, output, session):
         quarterly_topic_data = clean_data.groupby(['quarter', 'topic'])['ecMaxContribution'].sum().reset_index()
         quarterly_topic_data = quarterly_topic_data.sort_values('quarter')
         
+        quarterly_data['formatted_text'] = quarterly_data['ecMaxContribution'].apply(lambda x: f"€{format_number(x)}")
+
         fig = px.bar(
             quarterly_data,
             x='quarter',
@@ -357,7 +362,7 @@ def server(input, output, session):
         )
 
         fig.update_traces(
-            texttemplate='%{y:.2s}',
+            text=quarterly_data['formatted_text'],
             textposition='outside'
         )
         
@@ -393,11 +398,13 @@ def server(input, output, session):
 
     @render_plotly
     def time_topics():
-        clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'topic'])
+        clean_data = filtered_data().dropna(subset=['ecSignatureDate', 'topic']).copy()
         clean_data['quarter'] = clean_data['ecSignatureDate'].dt.to_period('Q').astype(str)
         clean_data['quarter'] = clean_data['quarter'].str.replace('Q', ' Q')
 
-        quarterly_topic_data = clean_data.groupby(['quarter', 'topic']).size().reset_index(name='count')
+        clean_data['topic_display'] = clean_data['topic'].map(topics)
+
+        quarterly_topic_data = clean_data.groupby(['quarter', 'topic_display']).size().reset_index(name='count')
         quarterly_topic_data = quarterly_topic_data.sort_values('quarter')
         
         fig = px.bar(
@@ -408,9 +415,9 @@ def server(input, output, session):
                 'quarter': 'Quarter',
                 'count': 'Number of Projects'
             },
-            color='topic',
-            color_discrete_map= colormap(),
-            category_orders= catorder()
+            color='topic_display',
+            color_discrete_map= {topics[i]: c for i, c in colormap().items()},
+            category_orders= {"topic_display": list(topics.values())}
         )
 
         fig.update_layout(
@@ -418,6 +425,7 @@ def server(input, output, session):
             yaxis_title='Number of Projects',
             template='plotly_white',
             xaxis={'categoryorder': 'array', 'categoryarray': quarterly_topic_data['quarter'].unique().tolist()},
+            legend_title_text=""
         )
 
         fig.update_traces(
@@ -427,7 +435,6 @@ def server(input, output, session):
 
         return fig
         
-      
     @reactive.calc
     def map_data():
         df = filtered_data()
@@ -550,6 +557,7 @@ def server(input, output, session):
         map.update_layout(
             margin={"r":0,"t":0,"l":0,"b":0},
             coloraxis_colorbar=dict(
+                title="",
                 tickvals=tick_avg_values,
                 ticktext=tick_avg_labels
             )
@@ -605,6 +613,7 @@ def server(input, output, session):
         map.update_layout(
             margin={"r":0,"t":0,"l":0,"b":0},
             coloraxis_colorbar=dict(
+                title="",
                 tickvals=tick_total_values,
                 ticktext=tick_total_labels
             )
