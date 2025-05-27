@@ -1,0 +1,15 @@
+﻿*.ipynb
+*.xlsx
+MordernDataAnalytics.csv
+MordernDataAnalytics.xlsx
+euroSciVoc.xlsx
+test.py
+exceltocsv.py
+readme.md
+*.md
+.gitattributes
+.gitignore
+requirements-generated.txt
+__pycache__/
+*.pyc
+*.pyo
