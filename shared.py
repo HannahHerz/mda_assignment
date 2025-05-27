@@ -7,10 +7,10 @@ import pandas as pd
 
 app_dir = Path(__file__).parent
 
-df1 = pd.read_csv("mda_assignment\MordernDataAnalytics.csv")
+df1 = pd.read_csv("MordernDataAnalytics.csv")
 df1['ecSignatureDate'] =pd.to_datetime(df1['ecSignatureDate'])
 
-df2 = pd.read_csv("mda_assignment\euroSciVoc.csv")
+df2 = pd.read_csv("euroSciVoc.csv")
 df2['topic'] = df2['euroSciVocPath'].str.extract(r'^/([^/]*)/')
 df2_filtered = df2[['projectID', 'topic']]
 df2_filtered = df2_filtered.drop_duplicates(subset=['projectID'])
