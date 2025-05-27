@@ -5,7 +5,7 @@
         "app_url": "https://marpappi.shinyapps.io/mda_assignment_eu_funding_analysis_dashboard/",
         "app_id": 14833503,
         "app_guid": null,
-        "title": "MDA assignment: EU Funding Analysis Dashboard",
+        "title": "MDA assignment",
         "app_mode": "python-shiny",
         "app_store_version": 1
     }
