@@ -246,7 +246,7 @@ app_ui = ui.page_fillable(
                     ui.card(
                     ui.layout_columns(
                     ui.input_text("organisationID", "Organization ID"),
-                    ui.input_numeric("n_participant", "Number of Participants", 1, min=1),
+                    ui.input_numeric("n_participant", "Number of Participants", 0, min=0),
                     ui.input_numeric("num_organisations", "Number of Organizations involved", 1, min=1)),
                     ui.layout_columns(
                     ui.input_numeric("num_sme", "Number of Small or Medium Entreprises", 0, min=0),
