@@ -5,7 +5,7 @@ import pandas as pd
 import re
 import matplotlib.pyplot as plt
 from wordcloud import STOPWORDS, WordCloud
-from mda_assignment.shared import app_dir, data
+from shared import app_dir, data
 from shiny import App, reactive, render, ui
 from shinywidgets import output_widget, render_plotly, render_widget
 from model import predict_funding
