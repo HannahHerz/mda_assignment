@@ -1,31 +1,37 @@
-# model.py
-
 import joblib
 import pandas as pd
 import numpy as np
-import sys
 import os
+import pickle
+import requests
+from io import BytesIO
 from sklearn.base import BaseEstimator, TransformerMixin
 
 # Custom transformer classes (must be defined for pickle loading)
 class OrgAvgPastEC(BaseEstimator, TransformerMixin):
     def __init__(self, org_dim):
-        self.org_dim = (
-            org_dim
-            if isinstance(org_dim, dict)
-            else org_dim.set_index('organisationID')['org_past_mean_ec'].to_dict()
-        )
+        if hasattr(org_dim, 'set_index'):
+            org_dim = org_dim.set_index('organisationID')['org_past_mean_ec'].to_dict()
+        self.org_dim = org_dim
 
     def fit(self, X, y=None):
         return self
 
     def transform(self, X):
-        def mean_for(cell):
-            orgs = [o.strip() for o in str(cell).split(';') if o.strip()]
-            vals = [self.org_dim.get(o, 0.0) for o in orgs]
-            return float(np.mean(vals)) if vals else 0.0
+        proj_to_means = {}
+        for _, row in X.iterrows():
+            pid = row['projectID']
+            orgs = (
+                str(row['organisationID'])
+                   .strip('[]')
+                   .replace(r',', ';')
+                   .split(';')
+            )
+            orgs = [o.strip() for o in orgs if o.strip()]
+            means = [ self.org_dim.get(o, 0.0) for o in orgs ]
+            proj_to_means[pid] = float(np.mean(means)) if means else 0.0
 
-        arr = X['organisationID'].apply(mean_for).values
+        arr = X['projectID'].map(proj_to_means).fillna(0.0).values
         return arr.reshape(-1,1)
 
 class CyclicalEncoder(BaseEstimator, TransformerMixin):
@@ -71,7 +77,6 @@ class SupervisedLDATopicEncoder(BaseEstimator, TransformerMixin):
         y_arr     = np.array(y).reshape(-1,1)
         sums      = (doc_topic * y_arr).sum(axis=0)
         weights   = doc_topic.sum(axis=0)
-        # Avoid division by zero
         weights = np.where(weights == 0, 1e-8, weights)
         self.topic_means_ = sums / weights
         return self
@@ -79,7 +84,7 @@ class SupervisedLDATopicEncoder(BaseEstimator, TransformerMixin):
     def transform(self, X):
         dtm       = self.vectorizer_.transform(X['objective'])
         doc_topic = self.lda_.transform(dtm)
-        return (doc_topic * self.topic_means_).sum(axis=1).reshape(-1,1) 
+        return (doc_topic * self.topic_means_).sum(axis=1).reshape(-1,1)
 
 class HierarchicalGrantModel:
     def __init__(self, classifier, small_model, large_model):
@@ -88,32 +93,22 @@ class HierarchicalGrantModel:
         self.large_model = large_model
     
     def predict(self, X):
-        # Classify small vs large
         is_large_pred = self.classifier.predict(X)
-        
-        # Initialize predictions array
         y_pred = np.empty(len(X), dtype=float)
-        
-        # Get masks
         mask_small = (is_large_pred == 0)
         mask_large = (is_large_pred == 1)
-        
-        # Make predictions
         if np.any(mask_small):
             y_pred[mask_small] = self.small_model.predict(X[mask_small])
         if np.any(mask_large):
             y_pred[mask_large] = self.large_model.predict(X[mask_large])
-            
         return y_pred
 
-# Fix for pickle loading - make classes available in __main__ namespace
-if __name__ != '__main__':
-    # When importing as a module, add classes to main namespace for pickle compatibility
-    import __main__
-    __main__.OrgAvgPastEC = OrgAvgPastEC
-    __main__.CyclicalEncoder = CyclicalEncoder
-    __main__.SupervisedLDATopicEncoder = SupervisedLDATopicEncoder
-    __main__.HierarchicalGrantModel = HierarchicalGrantModel
+# Expose classes for pickle compatibility
+import __main__
+__main__.OrgAvgPastEC = OrgAvgPastEC
+__main__.CyclicalEncoder = CyclicalEncoder
+__main__.SupervisedLDATopicEncoder = SupervisedLDATopicEncoder
+__main__.HierarchicalGrantModel = HierarchicalGrantModel
 
 # Country group definitions
 geo_groups = {
@@ -127,34 +122,78 @@ geo_groups = {
     'Americas': {'US','CA','BR','AR','CO','CL','MX','PE','UY','BO','CR','PA','GT','SV','PY','EC','VE','DO','HT','SR','AW','BQ','AI','GU'},
 }
 
-# Function to safely load models with error handling
+# Safe model loading without prints
+
 def load_model_safely(filename):
     try:
         return joblib.load(filename)
     except FileNotFoundError:
-        print(f"Warning: {filename} not found. Make sure all pickle files are in the correct directory.")
         return None
-    except Exception as e:
-        print(f"Error loading {filename}: {e}")
+    except Exception:
         return None
 
-# Load the trained models
-preprocessor = load_model_safely("preprocessor.pkl")
-size_clf     = load_model_safely("classifier_model.pkl")
-small_model  = load_model_safely("small_grant_model.pkl")
-large_model  = load_model_safely("large_grant_model.pkl")
+# GitHub LFS loader without prints
+def load_from_github_lfs(filename, base_url, fallback_local=True):
+    url = base_url + filename
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            raise Exception
+        content_text = response.text
+        if content_text.startswith('version https://git-lfs.github.com/spec/v1'):
+            lines = content_text.strip().split('\n')
+            oid = None
+            for line in lines:
+                if line.startswith('oid sha256:'):
+                    oid = line.split(':', 1)[1]
+            if oid:
+                lfs_url = f"https://media.githubusercontent.com/media/HannahHerz/mda_assignment/main/{filename}"
+                lfs_response = requests.get(lfs_url, timeout=30)
+                if lfs_response.status_code == 200:
+                    return pickle.load(BytesIO(lfs_response.content))
+        else:
+            return pickle.load(BytesIO(response.content))
+    except Exception:
+        if fallback_local:
+            return load_model_safely(filename)
+        return None
 
-# Check if all models loaded successfully
-models_loaded = all([preprocessor, size_clf, small_model, large_model])
+# Initialize models
+preprocessor = None
+size_clf = None
+small_model = None
+large_model = None
+models_loaded = False
+
+# Model validation helper
+def validate_model(model):
+    if model is None:
+        return False
+    try:
+        from sklearn.utils.validation import check_is_fitted
+        check_is_fitted(model)
+        return True
+    except Exception:
+        return False
+
+# Load all models
+
+def load_models():
+    global preprocessor, size_clf, small_model, large_model, models_loaded
+    base_url = "https://raw.githubusercontent.com/HannahHerz/mda_assignment/refs/heads/main/"
+    preprocessor = load_model_safely("preprocessor.pkl") or load_from_github_lfs("preprocessor.pkl", base_url, False)
+    size_clf     = load_model_safely("classifier_model.pkl") or load_from_github_lfs("classifier_model.pkl", base_url, False)
+    small_model  = load_model_safely("small_grant_model.pkl") or load_from_github_lfs("small_grant_model.pkl", base_url, False)
+    large_model  = load_model_safely("large_grant_model.pkl") or load_from_github_lfs("large_grant_model.pkl", base_url, False)
+    models_loaded = all([validate_model(preprocessor), validate_model(size_clf), validate_model(small_model), validate_model(large_model)])
+
+# Dataframe creation
 
 def make_input_df(inputs: dict) -> pd.DataFrame:
-    """
-    Create a DataFrame from input dictionary that matches the training data format
-    """
     start = pd.to_datetime(inputs['start_date'], dayfirst=True)
     dur   = int(inputs['duration_days'])
-    
     row = {
+        'projectID':           inputs.get('projectID', 'PRED_001'),
         'startDate':           start,
         'endDate':             start + pd.Timedelta(days=dur),
         'duration_days':       dur,
@@ -166,81 +205,42 @@ def make_input_df(inputs: dict) -> pd.DataFrame:
         'num_organisations':   int(inputs.get('num_organisations', 0)),
         'num_sme':             int(inputs.get('num_sme', 0)),
         'fundingScheme':       inputs.get('fundingScheme', '__MISSING__'),
-        'masterCall':          inputs.get('masterCall',    '__MISSING__'),
+        'masterCall':          inputs.get('masterCall', '__MISSING__'),
         'euroSciVoxTopic':     inputs.get('euroSciVoxTopic','not available'),
-        'objective':           inputs.get('objective',      ''),
+        'objective':           inputs.get('objective', ''),
         'organisationID':      inputs.get('organisationID', ''),
     }
-
-    # Check if country counts are already provided in inputs
-    country_counts_provided = any(f"{region}_count" in inputs for region in geo_groups.keys())
-    
-    if country_counts_provided:
-        # Use provided country counts
-        for region in geo_groups.keys():
-            row[f"{region}_count"] = int(inputs.get(f"{region}_count", 0))
-        row['num_countries'] = int(inputs.get('num_countries', 0))
-    else:
-        # Calculate country counts from countries string (fallback)
-        codes = [c.strip().upper() for c in inputs.get('countries','').split(';') if c.strip()]
-        for region, countries in geo_groups.items():
-            row[f"{region}_count"] = sum(code in countries for code in codes)
-        row['num_countries'] = len(codes)
-
+    codes = [c.strip().upper() for c in inputs.get('countries','').split(';') if c.strip()]
+    for region, countries in geo_groups.items():
+        row[f"{region}_count"] = sum(code in countries for code in codes)
+    row['num_countries'] = len(codes)
     return pd.DataFrame([row])
 
-def predict_funding(inputs: dict) -> float:
-    """
-    Make a funding prediction based on input parameters
-    """
-    if not models_loaded:
-        raise Exception("Models not loaded properly. Check that all .pkl files are in the correct directory.")
-    
-    try:
-        # Create input DataFrame
-        df = make_input_df(inputs)
-        
-        # Transform features using the preprocessor
-        Xf = preprocessor.transform(df)
-        
-        # Classify as small or large grant
-        is_large = bool(size_clf.predict(Xf)[0])
-        
-        # Select appropriate model and make prediction
-        model = large_model if is_large else small_model
-        prediction = float(model.predict(Xf)[0])
-        
-        # Ensure prediction is positive
-        return max(0, prediction)
-        
-    except Exception as e:
-        raise Exception(f"Prediction failed: {str(e)}")
+# Prediction function
 
-# For debugging purposes
+def predict_funding(inputs: dict) -> float:
+    global models_loaded
+    if not models_loaded:
+        load_models()
+    if not models_loaded:
+        raise Exception("Models not loaded properly.")
+    df = make_input_df(inputs)
+    Xf = preprocessor.transform(df)
+    is_large = bool(size_clf.predict(Xf)[0])
+    model = large_model if is_large else small_model
+    prediction = float(model.predict(Xf)[0])
+    return max(0, prediction)
+
+# Debugging (no prints)
 def debug_prediction(inputs: dict):
-    """
-    Debug function to see intermediate steps of prediction
-    """
-    try:
-        print("Input data:")
-        df = make_input_df(inputs)
-        print(df.to_string())
-        
-        print("\nTransformed features shape:")
-        Xf = preprocessor.transform(df)
-        print(Xf.shape)
-        
-        print("\nClassification (is_large):")
-        is_large = bool(size_clf.predict(Xf)[0])
-        print(is_large)
-        
-        print("\nFinal prediction:")
-        model = large_model if is_large else small_model
-        prediction = float(model.predict(Xf)[0])
-        print(f"€{prediction:,.2f}")
-        
-        return prediction
-        
-    except Exception as e:
-        print(f"Debug failed: {e}")
-        return None
+    global models_loaded
+    if not models_loaded:
+        load_models()
+    df = make_input_df(inputs)
+    Xf = preprocessor.transform(df)
+    is_large = bool(size_clf.predict(Xf)[0])
+    model = large_model if is_large else small_model
+    return float(model.predict(Xf)[0])
+
+if __name__ == "__main__":
+    load_models()
