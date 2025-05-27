@@ -1,4 +1,4 @@
-﻿shiny>=0.6.0
+shiny>=0.6.0
 shinywidgets>=0.3.0
 faicons>=0.2.0
 plotly>=5.15.0
@@ -8,5 +8,4 @@ matplotlib>=3.7.0
 wordcloud>=1.9.0
 scikit-learn>=1.3.0
 joblib>=1.3.0
-pywin32==310
 
